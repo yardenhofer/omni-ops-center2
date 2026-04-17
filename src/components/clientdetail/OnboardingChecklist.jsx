@@ -1,5 +1,5 @@
 import { base44 } from "@/api/base44Client";
-import { CheckCircle2, Circle, ClipboardList } from "lucide-react";
+import { CheckCircle2, Circle, ClipboardList, Server } from "lucide-react";
 
 const STEPS = [
   { key: "onboarding_kickoff_done",       label: "Kickoff call completed" },
@@ -11,11 +11,18 @@ const STEPS = [
 export default function OnboardingChecklist({ client, onClientUpdate }) {
   const completed = STEPS.filter(s => client[s.key]).length;
   const allDone = completed === STEPS.length;
+  const hasInfraStage = !!client.infra_stage;
 
   async function toggle(key) {
     const newVal = !client[key];
     await base44.entities.Client.update(client.id, { [key]: newVal });
     onClientUpdate({ [key]: newVal });
+  }
+
+  async function startInfraTracking() {
+    const updates = { infra_stage: "Infrastructure Ordered", infra_live_date: null };
+    await base44.entities.Client.update(client.id, updates);
+    onClientUpdate(updates);
   }
 
   return (
@@ -38,6 +45,16 @@ export default function OnboardingChecklist({ client, onClientUpdate }) {
           style={{ width: `${(completed / STEPS.length) * 100}%` }}
         />
       </div>
+
+      {!hasInfraStage && (
+        <button
+          onClick={startInfraTracking}
+          className="w-full mb-3 flex items-center justify-center gap-1.5 text-xs font-medium text-violet-500 border border-violet-400/30 bg-violet-500/5 hover:bg-violet-500/10 rounded-lg py-1.5 transition-colors"
+        >
+          <Server className="w-3.5 h-3.5" />
+          Start Infrastructure Tracking
+        </button>
+      )}
 
       <div className="space-y-2">
         {STEPS.map(({ key, label }) => {

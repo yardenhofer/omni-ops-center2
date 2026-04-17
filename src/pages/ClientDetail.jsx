@@ -20,6 +20,7 @@ import InboxHealthSection from "../components/clientdetail/InboxHealthSection";
 import AIInsightsPanel from "../components/clientdetail/AIInsightsPanel";
 import DQLinkSection from "../components/clientdetail/DQLinkSection";
 import EmailSequenceSection from "../components/clientdetail/EmailSequenceSection";
+import InfraStageTracker from "../components/clientdetail/InfraStageTracker";
 
 export default function ClientDetail() {
   const [client, setClient] = useState(null);
@@ -183,6 +184,8 @@ export default function ClientDetail() {
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
         <LeadVelocityChart client={client} />
       </div>
+
+      <InfraStageTracker client={client} onClientUpdate={handleClientUpdate} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ActivityLogSection client={client} />

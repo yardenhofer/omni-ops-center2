@@ -1,6 +1,7 @@
 import { differenceInDays, format } from "date-fns";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Server } from "lucide-react";
 import { Zap, Pause, AlertTriangle } from "lucide-react";
+import { isInfraStageVisible } from "../clientdetail/InfraStageTracker";
 import { STATUS_CONFIG, SENTIMENT_CONFIG, PACKAGE_CONFIG } from "../utils/redFlagEngine";
 
 const STATUS_GLOW = {
@@ -74,6 +75,19 @@ export default function ClientRow({ client, flags, status, isOwn, onClick, insta
             {client.heyreach_api_key && (
               <span className="shrink-0 text-[10px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                 <Zap className="w-2.5 h-2.5" />HeyReach
+              </span>
+            )}
+            {isInfraStageVisible(client) && (
+              <span className={`shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                client.infra_stage === "Infrastructure Live"
+                  ? "text-green-400 bg-green-500/10"
+                  : "text-violet-400 bg-violet-500/10"
+              }`}>
+                <Server className="w-2.5 h-2.5" />
+                {client.infra_stage === "Infrastructure Live" ? "Infra Live" :
+                 client.infra_stage === "Infrastructure Uploaded" ? "Infra Uploaded" :
+                 client.infra_stage === "Infrastructure In Process" ? "Infra In Process" :
+                 "Infra Ordered"}
               </span>
             )}
           </div>

@@ -143,6 +143,21 @@
       "type": "boolean",
       "default": false
     },
+    "infra_stage": {
+      "type": "string",
+      "enum": [
+        "Infrastructure Ordered",
+        "Infrastructure In Process",
+        "Infrastructure Uploaded",
+        "Infrastructure Live"
+      ],
+      "description": "Temporary onboarding infrastructure stage \u2014 disappears 2 days after going Live"
+    },
+    "infra_live_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date when infrastructure was marked as Live \u2014 used to auto-hide after 2 days"
+    },
     "instantly_api_key": {
       "type": "string",
       "description": "Client's Instantly.ai API key for their workspace"

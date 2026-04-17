@@ -77,6 +77,7 @@ export default function ClientSettingsSection({ client, onClientUpdate }) {
     status_override: client.status_override || "",
     notes: client.notes || "",
     instantly_api_key: client.instantly_api_key || "",
+    heyreach_api_key: client.heyreach_api_key || "",
     slack_channel_name: client.slack_channel_name || "",
   });
   const [saving, setSaving] = useState(false);
@@ -191,6 +192,11 @@ export default function ClientSettingsSection({ client, onClientUpdate }) {
           <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Instantly API Key</label>
           <input type="password" className={inputCls} value={form.instantly_api_key} placeholder="Paste client's Instantly API key…"
             onChange={e => setForm(f => ({ ...f, instantly_api_key: e.target.value }))} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">HeyReach API Key</label>
+          <input type="password" className={inputCls} value={form.heyreach_api_key} placeholder="Paste client's HeyReach API key…"
+            onChange={e => setForm(f => ({ ...f, heyreach_api_key: e.target.value }))} />
         </div>
         <div>
           <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Slack Channel Name (override)</label>

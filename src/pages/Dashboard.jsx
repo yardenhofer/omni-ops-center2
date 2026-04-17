@@ -21,7 +21,19 @@ function getCachedInstantlyResult(client) {
       noActive: client.instantly_cache_no_active || false,
     };
   }
-  return null; // not yet synced
+  return null;
+}
+
+function getCachedHeyReachResult(client) {
+  if (!client.heyreach_api_key) return null;
+  if (client.heyreach_cache_error) return { error: client.heyreach_cache_error };
+  if (client.heyreach_cache_updated) {
+    return {
+      pct: client.heyreach_cache_pct ?? 0,
+      noActive: client.heyreach_cache_no_active || false,
+    };
+  }
+  return null;
 }
 
 const DEFAULT_FILTERS = { search: "", sort: "sequence", package: "All", status: "All", group: "All", sequence: "All", newClient: "All" };
@@ -269,6 +281,7 @@ export default function Dashboard() {
             isOwn={user?.email === c.assigned_am}
             onClick={() => navigate(createPageUrl(`ClientDetail?id=${c.id}`))}
             instantlyResult={getCachedInstantlyResult(c)}
+            heyreachResult={getCachedHeyReachResult(c)}
           />
         ))}
       </div>

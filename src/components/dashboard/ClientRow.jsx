@@ -11,10 +11,13 @@ const STATUS_GLOW = {
   Terminated: "status-glow-critical",
 };
 
-export default function ClientRow({ client, flags, status, isOwn, onClick, instantlyResult }) {
+export default function ClientRow({ client, flags, status, isOwn, onClick, instantlyResult, heyreachResult }) {
   const seqPct = instantlyResult?.pct;
   const instantlyError = instantlyResult?.error;
   const noActive = instantlyResult?.noActive;
+  const hrPct = heyreachResult?.pct;
+  const hrError = heyreachResult?.error;
+  const hrNoActive = heyreachResult?.noActive;
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG["Healthy"];
   const sentCfg = SENTIMENT_CONFIG[client.client_sentiment] || SENTIMENT_CONFIG["Neutral"];
   const pkgCfg = PACKAGE_CONFIG[client.package_type] || {};
@@ -45,7 +48,7 @@ export default function ClientRow({ client, flags, status, isOwn, onClick, insta
         </div>
       )}
 
-      <div className="p-4 grid grid-cols-[1fr_auto] gap-2 lg:grid-cols-[200px_90px_120px_80px_100px_90px_90px_90px_auto] lg:gap-4 items-center">
+      <div className="p-4 grid grid-cols-[1fr_auto] gap-2 lg:grid-cols-[200px_90px_120px_80px_80px_100px_90px_90px_90px_auto] lg:gap-4 items-center">
         {/* Name + AM */}
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
@@ -66,6 +69,11 @@ export default function ClientRow({ client, flags, status, isOwn, onClick, insta
             {client.instantly_api_key && (
               <span className="shrink-0 text-[10px] font-bold text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
                 <Zap className="w-2.5 h-2.5" />Instantly
+              </span>
+            )}
+            {client.heyreach_api_key && (
+              <span className="shrink-0 text-[10px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                <Zap className="w-2.5 h-2.5" />HeyReach
               </span>
             )}
           </div>
@@ -109,6 +117,43 @@ export default function ClientRow({ client, flags, status, isOwn, onClick, insta
                       seqPct >= 80 ? 'bg-red-500' : seqPct >= 60 ? 'bg-orange-500' : 'bg-green-500'
                     }`}
                     style={{ width: `${Math.min(100, seqPct)}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400">…</span>
+            )
+          ) : (
+            <span className="text-xs text-gray-400">—</span>
+          )}
+        </div>
+
+        {/* HeyReach % */}
+        <div className="hidden lg:block text-center">
+          {client.heyreach_api_key ? (
+            hrError ? (
+              <div className="flex flex-col items-center gap-0.5 flag-chip" data-tip={hrError}>
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <span className="text-[10px] text-red-400">Error</span>
+              </div>
+            ) : hrNoActive ? (
+              <div className="flex flex-col items-center gap-0.5 flag-chip" data-tip="No active campaigns">
+                <Pause className="w-4 h-4 text-yellow-400" />
+                <span className="text-[10px] text-yellow-400">Paused</span>
+              </div>
+            ) : hrPct != null ? (
+              <div className="flex flex-col items-center gap-0.5">
+                <span className={`text-sm font-bold ${
+                  hrPct >= 80 ? 'text-red-500' : hrPct >= 60 ? 'text-orange-500' : 'text-green-500'
+                }`}>
+                  {hrPct}%
+                </span>
+                <div className="w-12 h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      hrPct >= 80 ? 'bg-red-500' : hrPct >= 60 ? 'bg-orange-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${Math.min(100, hrPct)}%` }}
                   />
                 </div>
               </div>

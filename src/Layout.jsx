@@ -84,7 +84,7 @@ export default function Layout({ children, currentPageName }) {
         `}>
           {/* Logo */}
           <div className="flex items-center gap-2.5 px-5 h-14 border-b border-gray-200 dark:border-gray-800 shrink-0">
-            <div className="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
               <Zap className="w-3.5 h-3.5 text-white" />
             </div>
             <span className="font-bold text-gray-900 dark:text-white tracking-tight">GBV Ops Center</span>
@@ -99,7 +99,7 @@ export default function Layout({ children, currentPageName }) {
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
                   ${currentPageName === page
-                    ? "bg-blue-600 text-white"
+                    ? "bg-violet-600 text-white"
                     : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white"
                   }`}
               >

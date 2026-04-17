@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { LayoutDashboard, ClipboardCheck, ClipboardList, TrendingUp, Bell, Sun, Moon, Menu, Zap, Settings, LogOut, Activity, FileCheck } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
 const NAV = [
   { label: "Dashboard",      page: "Dashboard",     icon: LayoutDashboard },
@@ -89,6 +90,13 @@ export default function Layout({ children, currentPageName }) {
             </div>
             <span className="font-bold text-gray-900 dark:text-white tracking-tight">GBV Ops Center</span>
           </div>
+
+          {/* Workspace switcher (admin only) */}
+          {user?.role === "admin" && (
+            <div className="pt-2 border-b border-gray-200 dark:border-gray-800 pb-2">
+              <WorkspaceSwitcher />
+            </div>
+          )}
 
           {/* Nav */}
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">

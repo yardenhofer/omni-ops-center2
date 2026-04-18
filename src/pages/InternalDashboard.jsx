@@ -1,6 +1,16 @@
 import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { RefreshCw, Linkedin, AlertTriangle, ChevronDown, ChevronRight, Users, BarChart3, TrendingUp, Activity } from "lucide-react";
+import { RefreshCw, Linkedin, AlertTriangle, ChevronDown, ChevronRight, Users, BarChart3, TrendingUp, Activity, Mail, Link2 } from "lucide-react";
+import OutreachChart from "@/components/internaldashboard/OutreachChart";
+import InMailLeaderboard from "@/components/internaldashboard/InMailLeaderboard";
+
+const PERIOD_OPTIONS = [
+  { label: "7 days", days: 7 },
+  { label: "14 days", days: 14 },
+  { label: "30 days", days: 30 },
+  { label: "60 days", days: 60 },
+  { label: "90 days", days: 90 },
+];
 
 function PctBar({ pct }) {
   if (pct == null) return <span className="text-xs text-gray-400">—</span>;
@@ -16,9 +26,9 @@ function PctBar({ pct }) {
   );
 }
 
-function WorkspaceCard({ workspace }) {
+function WorkspaceCard({ workspace, days }) {
   const [expanded, setExpanded] = useState(true);
-  const { client_name, accounts, campaigns, summary, error } = workspace;
+  const { client_name, accounts, campaigns, chartData, summary, error } = workspace;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -46,21 +56,21 @@ function WorkspaceCard({ workspace }) {
         </div>
 
         {!error && summary && (
-          <div className="flex items-center gap-6 mr-4">
+          <div className="flex items-center gap-5 mr-4">
             <div className="text-right hidden sm:block">
-              <p className="text-xs text-gray-400">Total Leads</p>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">{(summary.total_leads || 0).toLocaleString()}</p>
+              <p className="text-xs text-gray-400">Connections Sent</p>
+              <p className="text-sm font-bold text-violet-500">{(summary.total_connections || 0).toLocaleString()}</p>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p className="text-xs text-gray-400">InMails Sent</p>
+              <p className="text-sm font-bold text-emerald-500">{(summary.total_inmails || 0).toLocaleString()}</p>
             </div>
             <div className="text-right hidden sm:block">
               <p className="text-xs text-gray-400">In Progress</p>
               <p className="text-sm font-bold text-blue-500">{(summary.total_in_progress || 0).toLocaleString()}</p>
             </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-xs text-gray-400">Finished</p>
-              <p className="text-sm font-bold text-green-500">{(summary.total_finished || 0).toLocaleString()}</p>
-            </div>
             <div className="hidden sm:block">
-              <p className="text-xs text-gray-400 text-center mb-0.5">Overall %</p>
+              <p className="text-xs text-gray-400 text-center mb-0.5">Completion</p>
               {summary.active_campaigns === 0
                 ? <span className="text-xs text-yellow-400 font-medium">No active</span>
                 : <PctBar pct={summary.completion_pct} />
@@ -75,16 +85,37 @@ function WorkspaceCard({ workspace }) {
       </button>
 
       {expanded && !error && (
-        <div className="border-t border-gray-100 dark:border-gray-800">
-          {/* Per-sender accounts */}
+        <div className="border-t border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+
+          {/* Outreach activity — chart + leaderboard */}
+          <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Chart */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                <BarChart3 className="w-3.5 h-3.5 text-gray-400" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Daily Outreach (last {days}d)</p>
+              </div>
+              <OutreachChart chartData={chartData} />
+            </div>
+            {/* Leaderboard */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                <Users className="w-3.5 h-3.5 text-gray-400" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Per Sender Activity</p>
+              </div>
+              <InMailLeaderboard accounts={accounts} days={days} />
+            </div>
+          </div>
+
+          {/* Per-sender campaign progress */}
           {accounts.length > 0 && (
             <div className="p-4">
               <div className="flex items-center gap-1.5 mb-3">
-                <Users className="w-3.5 h-3.5 text-gray-400" />
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">LinkedIn Senders</p>
+                <Link2 className="w-3.5 h-3.5 text-gray-400" />
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Campaign Progress by Sender</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {accounts.map(acc => (
+                {accounts.filter(a => a.total_leads > 0).map(acc => (
                   <div key={acc.name} className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2.5">
                     <div className="flex items-center justify-between mb-1.5">
                       <p className="text-xs font-semibold text-gray-900 dark:text-white">{acc.name}</p>
@@ -109,9 +140,9 @@ function WorkspaceCard({ workspace }) {
             </div>
           )}
 
-          {/* Active Campaigns */}
+          {/* Active Campaigns list */}
           {campaigns.length > 0 && (
-            <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="p-4">
               <div className="flex items-center gap-1.5 mb-3">
                 <BarChart3 className="w-3.5 h-3.5 text-gray-400" />
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Campaigns ({campaigns.length})</p>
@@ -146,12 +177,13 @@ export default function InternalDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [days, setDays] = useState(14);
 
-  async function load() {
+  async function load(d) {
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke("heyReachAccountStats", {});
+      const res = await base44.functions.invoke("heyReachAccountStats", { days: d ?? days });
       setWorkspaces(res.data.workspaces || []);
       setLastUpdated(new Date());
     } catch (e) {
@@ -160,17 +192,22 @@ export default function InternalDashboard() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(days); }, []);
+
+  function handlePeriodChange(d) {
+    setDays(d);
+    load(d);
+  }
 
   const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);
-  const totalLeads = workspaces.reduce((s, w) => s + (w.summary?.total_leads || 0), 0);
-  const totalInProgress = workspaces.reduce((s, w) => s + (w.summary?.total_in_progress || 0), 0);
+  const totalConnections = workspaces.reduce((s, w) => s + (w.summary?.total_connections || 0), 0);
+  const totalInmails = workspaces.reduce((s, w) => s + (w.summary?.total_inmails || 0), 0);
   const totalActiveCampaigns = workspaces.reduce((s, w) => s + (w.summary?.active_campaigns || 0), 0);
 
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded bg-blue-500/10 flex items-center justify-center">
@@ -183,12 +220,31 @@ export default function InternalDashboard() {
             {lastUpdated && <span className="ml-2 text-xs text-gray-400">· Updated {lastUpdated.toLocaleTimeString()}</span>}
           </p>
         </div>
-        <button
-          onClick={load}
-          className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Period filter */}
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+            {PERIOD_OPTIONS.map(opt => (
+              <button
+                key={opt.days}
+                onClick={() => handlePeriodChange(opt.days)}
+                disabled={loading}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  days === opt.days
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => load(days)}
+            className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {/* Summary stats */}
@@ -197,8 +253,8 @@ export default function InternalDashboard() {
           {[
             { label: "LinkedIn Senders", value: totalAccounts, icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
             { label: "Active Campaigns", value: totalActiveCampaigns, icon: BarChart3, color: "text-violet-500", bg: "bg-violet-500/10" },
-            { label: "Leads In Progress", value: totalInProgress.toLocaleString(), icon: Activity, color: "text-orange-500", bg: "bg-orange-500/10" },
-            { label: "Total Leads", value: totalLeads.toLocaleString(), icon: TrendingUp, color: "text-green-500", bg: "bg-green-500/10" },
+            { label: `InMails Sent (${days}d)`, value: totalInmails.toLocaleString(), icon: Mail, color: "text-emerald-500", bg: "bg-emerald-500/10" },
+            { label: `Connections Sent (${days}d)`, value: totalConnections.toLocaleString(), icon: Link2, color: "text-indigo-500", bg: "bg-indigo-500/10" },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div key={label} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex items-center gap-3">
               <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
@@ -217,7 +273,7 @@ export default function InternalDashboard() {
       {loading ? (
         <div className="space-y-3">
           {Array(2).fill(0).map((_, i) => (
-            <div key={i} className="h-32 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
+            <div key={i} className="h-48 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
           ))}
         </div>
       ) : error ? (
@@ -231,7 +287,7 @@ export default function InternalDashboard() {
       ) : (
         <div className="space-y-4">
           {workspaces.map(w => (
-            <WorkspaceCard key={w.client_id} workspace={w} />
+            <WorkspaceCard key={w.client_id} workspace={w} days={days} />
           ))}
         </div>
       )}

@@ -49,6 +49,7 @@ const PERMISSIONS = [
 export default function Settings() {
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const isAdmin = currentUser?.role === "admin";
   const [loading, setLoading] = useState(true);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviting, setInviting] = useState(false);
@@ -135,8 +136,9 @@ export default function Settings() {
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Manage AMs and control their access</p>
       </div>
 
-      {/* Invite */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+      {/* Invite — admin only */}
+      {isAdmin && <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
+
         <div className="flex items-center gap-2 mb-4">
           <UserPlus className="w-4 h-4 text-blue-400" />
           <h2 className="font-semibold text-gray-900 dark:text-white text-sm">Invite an AM</h2>
@@ -173,7 +175,7 @@ export default function Settings() {
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Team members */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -215,8 +217,8 @@ export default function Settings() {
                 {/* Role toggle */}
                 <div className="flex justify-start lg:justify-center">
                   <button
-                    onClick={() => !isMe && toggleRole(u)}
-                    disabled={isMe || !!updating[`${u.id}-role`]}
+                    onClick={() => !isMe && isAdmin && toggleRole(u)}
+                    disabled={isMe || !isAdmin || !!updating[`${u.id}-role`]}
                     className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full transition-all
                       ${u.role === "admin"
                         ? "bg-purple-500/10 text-purple-400 border border-purple-500/20"
@@ -244,7 +246,8 @@ export default function Settings() {
                       type="number"
                       min="1"
                       value={u.group ?? ""}
-                      onChange={e => updateGroup(u, e.target.value)}
+                      onChange={e => isAdmin && updateGroup(u, e.target.value)}
+                      readOnly={!isAdmin}
                       placeholder="—"
                       className="w-14 text-center text-sm font-semibold px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400"
                     />
@@ -259,8 +262,8 @@ export default function Settings() {
                     <div key={key} className="flex items-center gap-2 lg:justify-center">
                       <span className="text-xs text-gray-500 lg:hidden">{label}:</span>
                       <button
-                        onClick={() => togglePermission(u, key)}
-                        disabled={!!updating[loadingKey]}
+                        onClick={() => isAdmin && togglePermission(u, key)}
+                        disabled={!isAdmin || !!updating[loadingKey]}
                         className={`relative w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none
                           ${enabled ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-700"}
                           ${updating[loadingKey] ? "opacity-50" : ""}

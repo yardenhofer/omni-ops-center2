@@ -13,7 +13,7 @@ const NAV = [
   { label: "Executive View", page: "ExecutiveView",  icon: TrendingUp },
   { label: "Lead Approvals", page: "LeadListApprovals", icon: FileCheck },
   { label: "Activity Log",   page: "ActivityLog",    icon: Activity, adminOnly: true },
-  { label: "Settings",       page: "Settings",       icon: Settings, adminOnly: true },
+  { label: "Settings",       page: "Settings",       icon: Settings },
 ];
 
 export default function Layout({ children, currentPageName }) {

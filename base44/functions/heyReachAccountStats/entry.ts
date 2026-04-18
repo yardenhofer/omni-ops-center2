@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
 
     const internalKey = Deno.env.get('HEYREACH_INTERNAL_API_KEY');
     const allWorkspaces = [
-      ...(internalKey ? [{ client_id: '__internal__', client_name: 'GBV Internal', api_key: internalKey }] : []),
+      ...(internalKey ? [{ client_id: '__internal__', client_name: 'Omni Internal', api_key: internalKey }] : []),
       ...clientWorkspaces,
     ];
 
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
             matched = name;
             if (!senderMap[matched]) senderMap[matched] = { total_leads: 0, finished_leads: 0, in_progress: 0, account_ids: new Set() };
           }
-          if (!senderMap[matched].inmails) {
+          if (senderMap[matched].inmails === undefined) {
             senderMap[matched].inmails = 0;
             senderMap[matched].connections = 0;
             senderMap[matched].connectionsAccepted = 0;

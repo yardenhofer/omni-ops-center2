@@ -35,7 +35,13 @@ Deno.serve(async (req) => {
     ];
 
     const now = new Date();
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    let startDate;
+    if (days === 1) {
+      // "Today" — start of current day UTC
+      startDate = new Date(now.toISOString().split('T')[0] + 'T00:00:00.000Z');
+    } else {
+      startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    }
 
     const workspaces = [];
 
@@ -109,48 +115,54 @@ Deno.serve(async (req) => {
         }
 
         // 5. Build per-sender data
-        // First build a map: accountId -> sender name (from campaign names like "FirstName LastName - Campaign")
-        const accountIdToSender = {};
-        for (const camp of activeCampaigns) {
-          const dashIdx = camp.name.indexOf(' - ');
-          const senderName = dashIdx > 0 ? camp.name.slice(0, dashIdx).trim() : null;
-          if (senderName) {
-            (camp.campaignAccountIds || []).forEach(id => {
-              if (!accountIdToSender[id]) accountIdToSender[id] = senderName;
-            });
-          }
+        // Build accountId -> full name map from firstName + lastName
+        const accountIdToName = {};
+        for (const acc of allAccounts) {
+          accountIdToName[acc.id] = `${acc.firstName || ''} ${acc.lastName || ''}`.trim() || `Account ${acc.id}`;
         }
 
-        // Build senderMap keyed by sender name, using accountId match as source of truth
+        // Build senderMap keyed by account full name
+        // Use accountId as the canonical key to avoid name-matching issues
         const senderMap = {};
 
-        // Add campaign progress data
-        for (const camp of activeCampaigns) {
-          const dashIdx = camp.name.indexOf(' - ');
-          const senderName = dashIdx > 0 ? camp.name.slice(0, dashIdx).trim() : camp.name;
-          if (!senderMap[senderName]) {
-            senderMap[senderName] = { total_leads: 0, finished_leads: 0, in_progress: 0, inmails: 0, connections: 0, connectionsAccepted: 0 };
-          }
-          senderMap[senderName].total_leads += camp.progressStats?.totalUsers || 0;
-          senderMap[senderName].finished_leads += camp.progressStats?.totalUsersFinished || 0;
-          senderMap[senderName].in_progress += camp.progressStats?.totalUsersInProgress || 0;
+        // Initialize all accounts in senderMap
+        for (const acc of allAccounts) {
+          const key = acc.id;
+          senderMap[key] = {
+            displayName: accountIdToName[acc.id],
+            total_leads: 0, finished_leads: 0, in_progress: 0,
+            inmails: 0, connections: 0, connectionsAccepted: 0,
+          };
         }
 
-        // Add per-account activity stats, matched by accountId -> senderName
+        // Add campaign progress data — map each campaign to its accounts
+        for (const camp of activeCampaigns) {
+          const accountIds = camp.campaignAccountIds || [];
+          // Distribute progress evenly across accounts in the campaign (or just credit the first)
+          for (const accId of accountIds) {
+            if (senderMap[accId]) {
+              // Attribute campaign leads to accounts (divide by number of accounts in campaign)
+              const divisor = accountIds.length || 1;
+              senderMap[accId].total_leads += Math.round((camp.progressStats?.totalUsers || 0) / divisor);
+              senderMap[accId].finished_leads += Math.round((camp.progressStats?.totalUsersFinished || 0) / divisor);
+              senderMap[accId].in_progress += Math.round((camp.progressStats?.totalUsersInProgress || 0) / divisor);
+            }
+          }
+        }
+
+        // Add per-account activity stats directly by account ID
         for (const acc of allAccounts) {
           const accStats = accountStatsMap[acc.id] || { inmails: 0, connections: 0, connectionsAccepted: 0 };
-          const senderName = accountIdToSender[acc.id] || acc.name || `Account ${acc.id}`;
-          if (!senderMap[senderName]) {
-            senderMap[senderName] = { total_leads: 0, finished_leads: 0, in_progress: 0, inmails: 0, connections: 0, connectionsAccepted: 0 };
+          if (senderMap[acc.id]) {
+            senderMap[acc.id].inmails = accStats.inmails;
+            senderMap[acc.id].connections = accStats.connections;
+            senderMap[acc.id].connectionsAccepted = accStats.connectionsAccepted;
           }
-          senderMap[senderName].inmails += accStats.inmails;
-          senderMap[senderName].connections += accStats.connections;
-          senderMap[senderName].connectionsAccepted += accStats.connectionsAccepted;
         }
 
         const accounts = Object.entries(senderMap)
-          .map(([name, stats]) => ({
-            name,
+          .map(([, stats]) => ({
+            name: stats.displayName,
             total_leads: stats.total_leads,
             finished_leads: stats.finished_leads,
             in_progress: stats.in_progress,
@@ -159,7 +171,7 @@ Deno.serve(async (req) => {
             connections: stats.connections,
             connections_accepted: stats.connectionsAccepted,
           }))
-          .sort((a, b) => b.total_leads - a.total_leads);
+          .sort((a, b) => b.inmails - a.inmails);
 
         // Overall summary
         let totalUsers = 0, totalFinished = 0, totalInProgress = 0;

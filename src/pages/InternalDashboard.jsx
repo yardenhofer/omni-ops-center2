@@ -5,6 +5,7 @@ import OutreachChart from "@/components/internaldashboard/OutreachChart";
 import InMailLeaderboard from "@/components/internaldashboard/InMailLeaderboard";
 
 const PERIOD_OPTIONS = [
+  { label: "Today", days: 1 },
   { label: "7 days", days: 7 },
   { label: "14 days", days: 14 },
   { label: "30 days", days: 30 },
@@ -177,7 +178,7 @@ export default function InternalDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [days, setDays] = useState(14);
+  const [days, setDays] = useState(1);
 
   async function load(d) {
     setLoading(true);

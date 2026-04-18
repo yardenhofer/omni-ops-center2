@@ -41,7 +41,7 @@ export default function Layout({ children, currentPageName }) {
             user_email: u.email,
             user_name: u.full_name || u.email,
             action: "login",
-            detail: "Logged into GBV Ops Center",
+            detail: "Logged into Omni Ops Center",
           });
         }
       }
@@ -88,7 +88,7 @@ export default function Layout({ children, currentPageName }) {
             <div className="w-7 h-7 rounded-md bg-violet-600 flex items-center justify-center shrink-0">
               <Zap className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-gray-900 dark:text-white tracking-tight">GBV Ops Center</span>
+            <span className="font-bold text-gray-900 dark:text-white tracking-tight">Omni Ops Center</span>
           </div>
 
           {/* Workspace switcher (admin only) */}
@@ -154,7 +154,7 @@ export default function Layout({ children, currentPageName }) {
             <button onClick={() => setSidebarOpen(true)}>
               <Menu className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
-            <span className="font-bold text-gray-900 dark:text-white">GBV Ops Center</span>
+            <span className="font-bold text-gray-900 dark:text-white">Omni Ops Center</span>
           </header>
 
           <main className="flex-1 overflow-y-auto">

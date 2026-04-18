@@ -122,17 +122,14 @@ Deno.serve(async (req) => {
           (camp.campaignAccountIds || []).forEach(id => senderMap[senderName].account_ids.add(id));
         }
 
-        // Also add accounts that have stats even if not in active campaigns
+        // Add ALL accounts to senderMap (even those with 0 activity in the period)
         for (const acc of allAccounts) {
-          const accStats = accountStatsMap[acc.id];
-          if (!accStats) continue;
-          // Try to match by name
+          const accStats = accountStatsMap[acc.id] || { inmails: 0, connections: 0, connectionsAccepted: 0 };
           const name = acc.name || `Account ${acc.id}`;
-          // Find a matching sender or create one
+          // Find a matching sender by account_id first, then by name prefix
           let matched = null;
           for (const [sName, s] of Object.entries(senderMap)) {
             if (s.account_ids.has(acc.id)) { matched = sName; break; }
-            // fuzzy: sender name matches start of account name or vice versa
             if (name.toLowerCase().startsWith(sName.toLowerCase()) || sName.toLowerCase().startsWith(name.toLowerCase().split(' ')[0])) {
               matched = sName; break;
             }

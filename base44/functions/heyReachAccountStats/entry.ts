@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
         const chartData = Object.entries(byDay)
           .map(([date, s]) => ({
             date: date.split('T')[0],
-            inmails: s.inmailMessagesSent || 0,
+            inmails: s.totalInmailStarted || 0,
             connections: s.connectionsSent || 0,
             connectionsAccepted: s.connectionsAccepted || 0,
           }))
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
             });
             let inmails = 0, connections = 0, connectionsAccepted = 0;
             for (const day of Object.values(sd?.byDayStats || {})) {
-              inmails += day.inmailMessagesSent || 0;
+              inmails += day.totalInmailStarted || 0;
               connections += day.connectionsSent || 0;
               connectionsAccepted += day.connectionsAccepted || 0;
             }
@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
           totalInProgress += camp.progressStats?.totalUsersInProgress || 0;
         }
         for (const day of Object.values(byDay)) {
-          totalInmails += day.inmailMessagesSent || 0;
+          totalInmails += day.totalInmailStarted || 0;
           totalConnections += day.connectionsSent || 0;
           totalConnectionsAccepted += day.connectionsAccepted || 0;
         }

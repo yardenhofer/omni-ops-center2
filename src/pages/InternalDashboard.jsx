@@ -173,6 +173,28 @@ function WorkspaceCard({ workspace, days }) {
   );
 }
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCached(d) {
+  try {
+    const raw = sessionStorage.getItem(`heyreach_${d}`);
+    if (!raw) return null;
+    const { workspaces, lastUpdated, expiry } = JSON.parse(raw);
+    if (Date.now() > expiry) return null;
+    return { workspaces, lastUpdated: new Date(lastUpdated) };
+  } catch { return null; }
+}
+
+function setCache(d, workspaces) {
+  try {
+    sessionStorage.setItem(`heyreach_${d}`, JSON.stringify({
+      workspaces,
+      lastUpdated: new Date().toISOString(),
+      expiry: Date.now() + CACHE_TTL_MS,
+    }));
+  } catch {}
+}
+
 export default function InternalDashboard() {
   const [workspaces, setWorkspaces] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -180,13 +202,22 @@ export default function InternalDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [days, setDays] = useState(1);
 
-  async function load(d) {
+  async function load(d, forceRefresh = false) {
+    const cached = !forceRefresh && getCached(d);
+    if (cached) {
+      setWorkspaces(cached.workspaces);
+      setLastUpdated(cached.lastUpdated);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const res = await base44.functions.invoke("heyReachAccountStats", { days: d ?? days });
-      setWorkspaces(res.data.workspaces || []);
+      const ws = res.data.workspaces || [];
+      setWorkspaces(ws);
       setLastUpdated(new Date());
+      setCache(d, ws);
     } catch (e) {
       setError(e?.message || "Failed to load data");
     }
@@ -240,7 +271,7 @@ export default function InternalDashboard() {
             ))}
           </div>
           <button
-            onClick={() => load(days)}
+            onClick={() => load(days, true)}
             className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />

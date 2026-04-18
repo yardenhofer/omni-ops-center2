@@ -35,13 +35,8 @@ Deno.serve(async (req) => {
     ];
 
     const now = new Date();
-    let startDate;
-    if (days === 1) {
-      // "Today" — start of current day UTC
-      startDate = new Date(now.toISOString().split('T')[0] + 'T00:00:00.000Z');
-    } else {
-      startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    }
+    // Always use a rolling window — avoids timezone/bucketing issues with HeyReach daily stats
+    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
     const workspaces = [];
 
@@ -92,26 +87,22 @@ Deno.serve(async (req) => {
           }))
           .sort((a, b) => a.date.localeCompare(b.date));
 
-        // 4. Per-account stats (InMails + connections) — fetch in parallel batches of 5
+        // 4. Per-account stats — fetch one at a time sequentially to avoid rate limiting
         const accountStatsMap = {};
-        const batchSize = 5;
-        for (let i = 0; i < allAccounts.length; i += batchSize) {
-          const batch = allAccounts.slice(i, i + batchSize);
-          await Promise.all(batch.map(async (acc) => {
-            const sd = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
-              startDate: startDate.toISOString(),
-              endDate: now.toISOString(),
-              accountIds: [acc.id],
-              campaignIds: [],
-            });
-            let inmails = 0, connections = 0, connectionsAccepted = 0;
-            for (const day of Object.values(sd?.byDayStats || {})) {
-              inmails += day.totalInmailStarted || 0;
-              connections += day.connectionsSent || 0;
-              connectionsAccepted += day.connectionsAccepted || 0;
-            }
-            accountStatsMap[acc.id] = { inmails, connections, connectionsAccepted };
-          }));
+        for (const acc of allAccounts) {
+          const sd = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
+            startDate: startDate.toISOString(),
+            endDate: now.toISOString(),
+            accountIds: [acc.id],
+            campaignIds: [],
+          });
+          let inmails = 0, connections = 0, connectionsAccepted = 0;
+          for (const day of Object.values(sd?.byDayStats || {})) {
+            inmails += day.totalInmailStarted || 0;
+            connections += day.connectionsSent || 0;
+            connectionsAccepted += day.connectionsAccepted || 0;
+          }
+          accountStatsMap[acc.id] = { inmails, connections, connectionsAccepted };
         }
 
         // 5. Build per-sender data

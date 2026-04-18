@@ -62,10 +62,6 @@ export default function Settings() {
     async function load() {
       const me = await base44.auth.me().catch(() => null);
       setCurrentUser(me);
-      if (me?.role !== "admin") {
-        setLoading(false);
-        return;
-      }
       const res = await base44.functions.invoke("listUsers", {});
       const allUsers = res.data.users || [];
       setUsers(allUsers);
@@ -130,15 +126,7 @@ export default function Settings() {
     return <div className="space-y-3">{Array(4).fill(0).map((_, i) => <div key={i} className="h-20 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />)}</div>;
   }
 
-  if (currentUser?.role !== "admin") {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center">
-        <ShieldOff className="w-12 h-12 text-gray-400 mb-3" />
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Admin Access Required</h2>
-        <p className="text-sm text-gray-500 mt-1">Only admins can access settings.</p>
-      </div>
-    );
-  }
+  // Allow all users to view settings
 
   return (
     <div className="space-y-6 max-w-4xl">

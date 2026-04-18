@@ -108,45 +108,44 @@ Deno.serve(async (req) => {
           }));
         }
 
-        // 5. Build per-sender data merging campaign progress + account stats
+        // 5. Build per-sender data
+        // First build a map: accountId -> sender name (from campaign names like "FirstName LastName - Campaign")
+        const accountIdToSender = {};
+        for (const camp of activeCampaigns) {
+          const dashIdx = camp.name.indexOf(' - ');
+          const senderName = dashIdx > 0 ? camp.name.slice(0, dashIdx).trim() : null;
+          if (senderName) {
+            (camp.campaignAccountIds || []).forEach(id => {
+              if (!accountIdToSender[id]) accountIdToSender[id] = senderName;
+            });
+          }
+        }
+
+        // Build senderMap keyed by sender name, using accountId match as source of truth
         const senderMap = {};
+
+        // Add campaign progress data
         for (const camp of activeCampaigns) {
           const dashIdx = camp.name.indexOf(' - ');
           const senderName = dashIdx > 0 ? camp.name.slice(0, dashIdx).trim() : camp.name;
           if (!senderMap[senderName]) {
-            senderMap[senderName] = { total_leads: 0, finished_leads: 0, in_progress: 0, account_ids: new Set() };
+            senderMap[senderName] = { total_leads: 0, finished_leads: 0, in_progress: 0, inmails: 0, connections: 0, connectionsAccepted: 0 };
           }
           senderMap[senderName].total_leads += camp.progressStats?.totalUsers || 0;
           senderMap[senderName].finished_leads += camp.progressStats?.totalUsersFinished || 0;
           senderMap[senderName].in_progress += camp.progressStats?.totalUsersInProgress || 0;
-          (camp.campaignAccountIds || []).forEach(id => senderMap[senderName].account_ids.add(id));
         }
 
-        // Add ALL accounts to senderMap (even those with 0 activity in the period)
+        // Add per-account activity stats, matched by accountId -> senderName
         for (const acc of allAccounts) {
           const accStats = accountStatsMap[acc.id] || { inmails: 0, connections: 0, connectionsAccepted: 0 };
-          const name = acc.name || `Account ${acc.id}`;
-          // Find a matching sender by account_id first, then by name prefix
-          let matched = null;
-          for (const [sName, s] of Object.entries(senderMap)) {
-            if (s.account_ids.has(acc.id)) { matched = sName; break; }
-            if (name.toLowerCase().startsWith(sName.toLowerCase()) || sName.toLowerCase().startsWith(name.toLowerCase().split(' ')[0])) {
-              matched = sName; break;
-            }
+          const senderName = accountIdToSender[acc.id] || acc.name || `Account ${acc.id}`;
+          if (!senderMap[senderName]) {
+            senderMap[senderName] = { total_leads: 0, finished_leads: 0, in_progress: 0, inmails: 0, connections: 0, connectionsAccepted: 0 };
           }
-          if (!matched) {
-            matched = name;
-            if (!senderMap[matched]) senderMap[matched] = { total_leads: 0, finished_leads: 0, in_progress: 0, account_ids: new Set() };
-          }
-          if (senderMap[matched].inmails === undefined) {
-            senderMap[matched].inmails = 0;
-            senderMap[matched].connections = 0;
-            senderMap[matched].connectionsAccepted = 0;
-          }
-          senderMap[matched].inmails += accStats.inmails;
-          senderMap[matched].connections += accStats.connections;
-          senderMap[matched].connectionsAccepted += accStats.connectionsAccepted;
-          senderMap[matched].account_ids.add(acc.id);
+          senderMap[senderName].inmails += accStats.inmails;
+          senderMap[senderName].connections += accStats.connections;
+          senderMap[senderName].connectionsAccepted += accStats.connectionsAccepted;
         }
 
         const accounts = Object.entries(senderMap)
@@ -156,9 +155,9 @@ Deno.serve(async (req) => {
             finished_leads: stats.finished_leads,
             in_progress: stats.in_progress,
             completion_pct: stats.total_leads > 0 ? Math.round((stats.finished_leads / stats.total_leads) * 100) : 0,
-            inmails: stats.inmails || 0,
-            connections: stats.connections || 0,
-            connections_accepted: stats.connectionsAccepted || 0,
+            inmails: stats.inmails,
+            connections: stats.connections,
+            connections_accepted: stats.connectionsAccepted,
           }))
           .sort((a, b) => b.total_leads - a.total_leads);
 

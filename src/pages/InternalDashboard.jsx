@@ -202,29 +202,45 @@ export default function InternalDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [days, setDays] = useState(1);
 
-  async function load(d, forceRefresh = false) {
+  async function load(d, forceRefresh = false, silent = false) {
     const cached = !forceRefresh && getCached(d);
     if (cached) {
-      setWorkspaces(cached.workspaces);
-      setLastUpdated(cached.lastUpdated);
-      setLoading(false);
+      if (!silent) {
+        setWorkspaces(cached.workspaces);
+        setLastUpdated(cached.lastUpdated);
+        setLoading(false);
+      }
       return;
     }
-    setLoading(true);
-    setError(null);
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const res = await base44.functions.invoke("heyReachAccountStats", { days: d ?? days });
       const ws = res.data.workspaces || [];
-      setWorkspaces(ws);
-      setLastUpdated(new Date());
+      if (!silent) {
+        setWorkspaces(ws);
+        setLastUpdated(new Date());
+      }
       setCache(d, ws);
     } catch (e) {
-      setError(e?.message || "Failed to load data");
+      if (!silent) setError(e?.message || "Failed to load data");
     }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }
 
-  useEffect(() => { load(days); }, []);
+  useEffect(() => {
+    load(days).then(() => {
+      // Prefetch 7d and 30d in background after initial load
+      setTimeout(() => {
+        if (!getCached(7)) load(7, false, true);
+      }, 500);
+      setTimeout(() => {
+        if (!getCached(30)) load(30, false, true);
+      }, 1000);
+    });
+  }, []);
 
   function handlePeriodChange(d) {
     setDays(d);

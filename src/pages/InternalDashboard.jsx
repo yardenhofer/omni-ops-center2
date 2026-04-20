@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { RefreshCw, Linkedin, AlertTriangle, ChevronDown, ChevronRight, Users, BarChart3, TrendingUp, Activity, Mail, Link2 } from "lucide-react";
 import OutreachChart from "@/components/internaldashboard/OutreachChart";
@@ -27,9 +27,71 @@ function PctBar({ pct }) {
   );
 }
 
-function WorkspaceCard({ workspace, days }) {
+function SectionSkeleton({ label }) {
+  return (
+    <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+      <div className="flex items-center gap-1.5 mb-3">
+        <div className="w-3.5 h-3.5 rounded bg-gray-200 dark:bg-gray-700 animate-pulse" />
+        <div className="h-3 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+      </div>
+      <div className="space-y-2">
+        {Array(3).fill(0).map((_, i) => (
+          <div key={i} className="h-8 rounded-lg bg-gray-100 dark:bg-gray-800 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceCard({ clientId, clientName, days }) {
   const [expanded, setExpanded] = useState(true);
-  const { client_name, accounts, campaigns, chartData, summary, error } = workspace;
+  // Phase 1 state
+  const [summary, setSummary] = useState(null);
+  const [campaigns, setCampaigns] = useState(null);
+  const [chartData, setChartData] = useState(null);
+  const [phase1Error, setPhase1Error] = useState(null);
+  const [phase1Done, setPhase1Done] = useState(false);
+  // Phase 2 state
+  const [accounts, setAccounts] = useState(null);
+  const [phase2Done, setPhase2Done] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchPhase1() {
+      try {
+        const res = await base44.functions.invoke("heyReachAccountStats", { days, client_id: clientId });
+        if (cancelled) return;
+        const ws = res.data.workspace;
+        if (ws.error) { setPhase1Error(ws.error); setPhase1Done(true); return; }
+        setSummary(ws.summary);
+        setCampaigns(ws.campaigns);
+        setChartData(ws.chartData);
+        setPhase1Done(true);
+        // Kick off phase 2 immediately
+        fetchPhase2(ws.accountIds, ws.activeCampaignRaw);
+      } catch (e) {
+        if (!cancelled) { setPhase1Error(e?.message || 'Failed'); setPhase1Done(true); }
+      }
+    }
+
+    async function fetchPhase2(accountIds, activeCampaignRaw) {
+      try {
+        const res = await base44.functions.invoke("heyReachAccountStats", {
+          days, client_id: clientId, phase: 'senders',
+          account_ids: accountIds, active_campaign_raw: activeCampaignRaw,
+        });
+        if (cancelled) return;
+        setAccounts(res.data.accounts || []);
+        setPhase2Done(true);
+      } catch (e) {
+        if (!cancelled) { setAccounts([]); setPhase2Done(true); }
+      }
+    }
+
+    fetchPhase1();
+    return () => { cancelled = true; };
+  }, [clientId, days]);
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
@@ -40,23 +102,25 @@ function WorkspaceCard({ workspace, days }) {
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-            <Linkedin className="w-4 h-4 text-blue-500" />
+            {phase1Done ? <Linkedin className="w-4 h-4 text-blue-500" /> : <Linkedin className="w-4 h-4 text-blue-500 animate-pulse" />}
           </div>
           <div>
-            <p className="font-semibold text-gray-900 dark:text-white text-sm">{client_name}</p>
-            {error ? (
+            <p className="font-semibold text-gray-900 dark:text-white text-sm">{clientName}</p>
+            {phase1Error ? (
               <p className="text-xs text-red-400 flex items-center gap-1 mt-0.5">
-                <AlertTriangle className="w-3 h-3" /> {error}
+                <AlertTriangle className="w-3 h-3" /> {phase1Error}
+              </p>
+            ) : summary ? (
+              <p className="text-xs text-gray-500">
+                {summary.total_accounts ?? 0} senders · {summary.active_campaigns ?? 0} active campaigns
               </p>
             ) : (
-              <p className="text-xs text-gray-500">
-                {summary?.total_accounts ?? 0} senders · {summary?.active_campaigns ?? 0} active campaigns
-              </p>
+              <div className="h-3 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mt-0.5" />
             )}
           </div>
         </div>
 
-        {!error && summary && (
+        {!phase1Error && summary && (
           <div className="flex items-center gap-5 mr-4">
             <div className="text-right hidden sm:block">
               <p className="text-xs text-gray-400">Connections Sent</p>
@@ -85,86 +149,100 @@ function WorkspaceCard({ workspace, days }) {
         </div>
       </button>
 
-      {expanded && !error && (
-        <div className="border-t border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+      {expanded && !phase1Error && (
+        <div className="divide-y divide-gray-100 dark:divide-gray-800">
 
-          {/* Outreach activity — chart + leaderboard */}
-          <div className="p-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Chart */}
-            <div>
+          {/* Section 1: Chart (arrives with phase 1) */}
+          {chartData ? (
+            <div className="p-4 border-t border-gray-100 dark:border-gray-800">
               <div className="flex items-center gap-1.5 mb-3">
                 <BarChart3 className="w-3.5 h-3.5 text-gray-400" />
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Daily Outreach (last {days}d)</p>
               </div>
               <OutreachChart chartData={chartData} />
             </div>
-            {/* Leaderboard */}
-            <div>
+          ) : (
+            <SectionSkeleton />
+          )}
+
+          {/* Section 2: Per Sender Activity — leaderboard (arrives with phase 2) */}
+          {accounts ? (
+            <div className="p-4">
               <div className="flex items-center gap-1.5 mb-3">
                 <Users className="w-3.5 h-3.5 text-gray-400" />
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Per Sender Activity</p>
               </div>
               <InMailLeaderboard accounts={accounts} days={days} />
             </div>
-          </div>
+          ) : phase1Done ? (
+            <SectionSkeleton />
+          ) : null}
 
-          {/* Per-sender campaign progress */}
-          {accounts.length > 0 && (
-            <div className="p-4">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Link2 className="w-3.5 h-3.5 text-gray-400" />
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Campaign Progress by Sender</p>
+          {/* Section 3: Campaign Progress by Sender (arrives with phase 2) */}
+          {accounts ? (
+            accounts.filter(a => a.total_leads > 0).length > 0 && (
+              <div className="p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Link2 className="w-3.5 h-3.5 text-gray-400" />
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Campaign Progress by Sender</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+                  {accounts.filter(a => a.total_leads > 0).map(acc => (
+                    <div key={acc.name} className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-xs font-semibold text-gray-900 dark:text-white">{acc.name}</p>
+                        <span className={`text-xs font-bold ${
+                          acc.completion_pct >= 80 ? 'text-red-500' : acc.completion_pct >= 60 ? 'text-orange-500' : 'text-green-500'
+                        }`}>{acc.completion_pct}%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden mb-1.5">
+                        <div
+                          className={`h-full rounded-full ${acc.completion_pct >= 80 ? 'bg-red-500' : acc.completion_pct >= 60 ? 'bg-orange-500' : 'bg-green-500'}`}
+                          style={{ width: `${Math.min(100, acc.completion_pct)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-gray-400">
+                        <span>{acc.finished_leads.toLocaleString()} done</span>
+                        <span>{acc.in_progress.toLocaleString()} active</span>
+                        <span>{acc.total_leads.toLocaleString()} total</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                {accounts.filter(a => a.total_leads > 0).map(acc => (
-                  <div key={acc.name} className="bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-xs font-semibold text-gray-900 dark:text-white">{acc.name}</p>
-                      <span className={`text-xs font-bold ${
-                        acc.completion_pct >= 80 ? 'text-red-500' : acc.completion_pct >= 60 ? 'text-orange-500' : 'text-green-500'
-                      }`}>{acc.completion_pct}%</span>
+            )
+          ) : phase1Done ? (
+            <SectionSkeleton />
+          ) : null}
+
+          {/* Section 4: Active Campaigns (arrives with phase 1) */}
+          {campaigns ? (
+            campaigns.length > 0 && (
+              <div className="p-4">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <BarChart3 className="w-3.5 h-3.5 text-gray-400" />
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Campaigns ({campaigns.length})</p>
+                </div>
+                <div className="space-y-1.5">
+                  {campaigns.map(camp => (
+                    <div key={camp.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{camp.name}</p>
+                        <p className="text-[10px] text-gray-400">{camp.finished_leads.toLocaleString()} finished · {camp.in_progress.toLocaleString()} active · {camp.total_leads.toLocaleString()} total</p>
+                      </div>
+                      <div className="shrink-0 ml-3">
+                        <PctBar pct={camp.completion_pct} />
+                      </div>
                     </div>
-                    <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden mb-1.5">
-                      <div
-                        className={`h-full rounded-full ${acc.completion_pct >= 80 ? 'bg-red-500' : acc.completion_pct >= 60 ? 'bg-orange-500' : 'bg-green-500'}`}
-                        style={{ width: `${Math.min(100, acc.completion_pct)}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[10px] text-gray-400">
-                      <span>{acc.finished_leads.toLocaleString()} done</span>
-                      <span>{acc.in_progress.toLocaleString()} active</span>
-                      <span>{acc.total_leads.toLocaleString()} total</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )
+          ) : (
+            <SectionSkeleton />
           )}
 
-          {/* Active Campaigns list */}
-          {campaigns.length > 0 && (
-            <div className="p-4">
-              <div className="flex items-center gap-1.5 mb-3">
-                <BarChart3 className="w-3.5 h-3.5 text-gray-400" />
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Campaigns ({campaigns.length})</p>
-              </div>
-              <div className="space-y-1.5">
-                {campaigns.map(camp => (
-                  <div key={camp.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{camp.name}</p>
-                      <p className="text-[10px] text-gray-400">{camp.finished_leads.toLocaleString()} finished · {camp.in_progress.toLocaleString()} active · {camp.total_leads.toLocaleString()} total</p>
-                    </div>
-                    <div className="shrink-0 ml-3">
-                      <PctBar pct={camp.completion_pct} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {accounts.length === 0 && campaigns.length === 0 && (
+          {phase2Done && accounts?.length === 0 && campaigns?.length === 0 && (
             <div className="p-6 text-center text-sm text-gray-400">No active campaigns found.</div>
           )}
         </div>
@@ -173,118 +251,39 @@ function WorkspaceCard({ workspace, days }) {
   );
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getCached(d) {
-  try {
-    const raw = sessionStorage.getItem(`heyreach_${d}`);
-    if (!raw) return null;
-    const { workspaces, lastUpdated, expiry } = JSON.parse(raw);
-    if (Date.now() > expiry) return null;
-    return { workspaces, lastUpdated: new Date(lastUpdated) };
-  } catch { return null; }
-}
-
-function setCache(d, workspaces) {
-  try {
-    sessionStorage.setItem(`heyreach_${d}`, JSON.stringify({
-      workspaces,
-      lastUpdated: new Date().toISOString(),
-      expiry: Date.now() + CACHE_TTL_MS,
-    }));
-  } catch {}
-}
 
 export default function InternalDashboard() {
-  const [workspaces, setWorkspaces] = useState([]);
-  // Tracks which workspace IDs are still loading
-  const [loadingIds, setLoadingIds] = useState(new Set());
+  const [workspaceList, setWorkspaceList] = useState(null); // null = not loaded yet
   const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
   const [days, setDays] = useState(1);
-  const cancelledRef = useRef(false);
+  const [loadKey, setLoadKey] = useState(0); // bump to force WorkspaceCards to remount/refetch
 
-  async function fetchWorkspace(clientId, d) {
-    const res = await base44.functions.invoke("heyReachAccountStats", { days: d, client_id: clientId });
-    return res.data.workspace;
-  }
-
-  async function load(d, forceRefresh = false) {
-    const cached = !forceRefresh && getCached(d);
-    if (cached) {
-      setWorkspaces(cached.workspaces);
-      setLastUpdated(cached.lastUpdated);
-      setInitializing(false);
-      setLoadingIds(new Set());
-      return;
-    }
-
-    cancelledRef.current = false;
-    setWorkspaces([]);
-    setLoadingIds(new Set());
+  async function loadList(d) {
     setInitializing(true);
     setError(null);
-
+    setWorkspaceList(null);
     try {
-      // Phase 1: get the workspace list instantly
-      const listRes = await base44.functions.invoke("heyReachAccountStats", { days: d });
-      const wsList = listRes.data.workspace_list || [];
-
-      if (cancelledRef.current) return;
-
-      // Show skeleton cards immediately
-      setInitializing(false);
-      setLoadingIds(new Set(wsList.map(w => w.client_id)));
-      // Seed with placeholder entries so cards appear right away
-      setWorkspaces(wsList.map(w => ({ client_id: w.client_id, client_name: w.client_name, _loading: true })));
-
-      // Phase 2: fetch each workspace sequentially, updating UI as each finishes
-      const collected = [];
-      for (const w of wsList) {
-        if (cancelledRef.current) return;
-        try {
-          const ws = await fetchWorkspace(w.client_id, d);
-          if (cancelledRef.current) return;
-          collected.push(ws);
-          setWorkspaces(prev => prev.map(p => p.client_id === ws.client_id ? ws : p));
-        } catch (err) {
-          const errWs = {
-            client_id: w.client_id,
-            client_name: w.client_name,
-            error: err?.message || "Failed",
-            accounts: [], campaigns: [], chartData: [], summary: null,
-          };
-          collected.push(errWs);
-          setWorkspaces(prev => prev.map(p => p.client_id === w.client_id ? errWs : p));
-        }
-        setLoadingIds(prev => { const n = new Set(prev); n.delete(w.client_id); return n; });
-      }
-
-      setLastUpdated(new Date());
-      setCache(d, collected);
-
+      const res = await base44.functions.invoke("heyReachAccountStats", { days: d });
+      setWorkspaceList(res.data.workspace_list || []);
     } catch (e) {
-      setError(e?.message || "Failed to load data");
+      setError(e?.message || "Failed to load workspaces");
+    } finally {
       setInitializing(false);
     }
   }
 
-  useEffect(() => { load(days); return () => { cancelledRef.current = true; }; }, []);
+  useEffect(() => { loadList(days); }, [days]);
 
   function handlePeriodChange(newD) {
-    cancelledRef.current = true;
     setDays(newD);
-    setTimeout(() => {
-      cancelledRef.current = false;
-      load(newD, true);
-    }, 0);
+    setLoadKey(k => k + 1);
   }
 
-  const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);
-  const totalConnections = workspaces.reduce((s, w) => s + (w.summary?.total_connections || 0), 0);
-  const totalInmails = workspaces.reduce((s, w) => s + (w.summary?.total_inmails || 0), 0);
-  const totalActiveCampaigns = workspaces.reduce((s, w) => s + (w.summary?.active_campaigns || 0), 0);
+  function handleRefresh() {
+    setLoadKey(k => k + 1);
+    loadList(days);
+  }
 
   return (
     <div className="space-y-5">
@@ -299,7 +298,6 @@ export default function InternalDashboard() {
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             LinkedIn campaign status across all HeyReach workspaces
-            {lastUpdated && <span className="ml-2 text-xs text-gray-400">· Updated {lastUpdated.toLocaleTimeString()}</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -321,36 +319,14 @@ export default function InternalDashboard() {
             ))}
           </div>
           <button
-            onClick={() => { cancelledRef.current = true; setTimeout(() => { cancelledRef.current = false; load(days, true); }, 0); }}
+            onClick={handleRefresh}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
           >
-            <RefreshCw className={`w-4 h-4 ${initializing || loadingIds.size > 0 ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${initializing ? "animate-spin" : ""}`} />
             Refresh Data
           </button>
         </div>
       </div>
-
-      {/* Summary stats */}
-      {workspaces.filter(w => !w._loading).length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { label: "LinkedIn Senders", value: totalAccounts, icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
-            { label: "Active Campaigns", value: totalActiveCampaigns, icon: BarChart3, color: "text-violet-500", bg: "bg-violet-500/10" },
-            { label: `InMails Sent (${days}d)`, value: totalInmails.toLocaleString(), icon: Mail, color: "text-emerald-500", bg: "bg-emerald-500/10" },
-            { label: `Connections Sent (${days}d)`, value: totalConnections.toLocaleString(), icon: Link2, color: "text-indigo-500", bg: "bg-indigo-500/10" },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
-            <div key={label} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
-                <Icon className={`w-4 h-4 ${color}`} />
-              </div>
-              <div>
-                <p className="text-xl font-bold text-gray-900 dark:text-white">{value}</p>
-                <p className="text-xs text-gray-500">{label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Content */}
       {error && (
@@ -365,35 +341,15 @@ export default function InternalDashboard() {
             <div key={i} className="h-48 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
           ))}
         </div>
-      ) : workspaces.length === 0 && !error ? (
+      ) : workspaceList?.length === 0 && !error ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           No HeyReach workspaces configured.
         </div>
       ) : (
         <div className="space-y-4">
-          {workspaces.map(w => (
-            w._loading ? (
-              <div key={w.client_id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                    <Linkedin className="w-4 h-4 text-blue-500 animate-pulse" />
-                  </div>
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                    <div className="h-3 w-24 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
-                  </div>
-                  <div className="text-xs text-gray-400 animate-pulse">Fetching data…</div>
-                </div>
-              </div>
-            ) : (
-              <WorkspaceCard key={w.client_id} workspace={w} days={days} />
-            )
+          {(workspaceList || []).map(w => (
+            <WorkspaceCard key={`${w.client_id}-${loadKey}`} clientId={w.client_id} clientName={w.client_name} days={days} />
           ))}
-          {loadingIds.size > 0 && (
-            <p className="text-xs text-center text-gray-400 animate-pulse">
-              Loading {loadingIds.size} more workspace{loadingIds.size > 1 ? 's' : ''}…
-            </p>
-          )}
         </div>
       )}
     </div>

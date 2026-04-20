@@ -10,7 +10,8 @@ async function heyFetch(url, apiKey, body) {
   return resp.json();
 }
 
-async function processWorkspace(ws, startDate, now) {
+// Phase 1: campaigns + overall chart (fast — no per-account loops)
+async function processSummaryPhase(ws, startDate, now) {
   let allCampaigns = [];
   let offset = 0;
   while (true) {
@@ -21,7 +22,6 @@ async function processWorkspace(ws, startDate, now) {
     if (items.length < 100) break;
     offset += 100;
   }
-
   const activeCampaigns = allCampaigns.filter(c => c.status === 'IN_PROGRESS');
 
   let allAccounts = [];
@@ -52,8 +52,57 @@ async function processWorkspace(ws, startDate, now) {
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  let totalUsers = 0, totalFinished = 0, totalInProgress = 0;
+  let totalInmails = 0, totalConnections = 0, totalConnectionsAccepted = 0;
+  for (const camp of activeCampaigns) {
+    totalUsers += camp.progressStats?.totalUsers || 0;
+    totalFinished += camp.progressStats?.totalUsersFinished || 0;
+    totalInProgress += camp.progressStats?.totalUsersInProgress || 0;
+  }
+  for (const day of Object.values(byDay)) {
+    totalInmails += day.totalInmailStarted || 0;
+    totalConnections += day.connectionsSent || 0;
+    totalConnectionsAccepted += day.connectionsAccepted || 0;
+  }
+
+  return {
+    campaigns: activeCampaigns.map(c => ({
+      id: c.id,
+      name: c.name,
+      completion_pct: c.progressStats?.totalUsers > 0
+        ? Math.round((c.progressStats.totalUsersFinished / c.progressStats.totalUsers) * 100)
+        : 0,
+      total_leads: c.progressStats?.totalUsers || 0,
+      finished_leads: c.progressStats?.totalUsersFinished || 0,
+      in_progress: c.progressStats?.totalUsersInProgress || 0,
+    })),
+    chartData,
+    accountIds: allAccounts.map(a => ({ id: a.id, firstName: a.firstName, lastName: a.lastName })),
+    activeCampaignRaw: activeCampaigns.map(c => ({
+      campaignAccountIds: c.campaignAccountIds || [],
+      totalUsers: c.progressStats?.totalUsers || 0,
+      totalUsersFinished: c.progressStats?.totalUsersFinished || 0,
+      totalUsersInProgress: c.progressStats?.totalUsersInProgress || 0,
+    })),
+    summary: {
+      active_campaigns: activeCampaigns.length,
+      total_campaigns: allCampaigns.length,
+      total_accounts: allAccounts.length,
+      completion_pct: totalUsers > 0 ? Math.round((totalFinished / totalUsers) * 100) : null,
+      total_leads: totalUsers,
+      total_finished: totalFinished,
+      total_in_progress: totalInProgress,
+      total_inmails: totalInmails,
+      total_connections: totalConnections,
+      total_connections_accepted: totalConnectionsAccepted,
+    },
+  };
+}
+
+// Phase 2: per-sender stats (slow — one API call per account)
+async function processSendersPhase(ws, startDate, now, accountIds, activeCampaignRaw) {
   const accountStatsMap = {};
-  for (const acc of allAccounts) {
+  for (const acc of accountIds) {
     const sd = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
       startDate: startDate.toISOString(),
       endDate: now.toISOString(),
@@ -70,7 +119,7 @@ async function processWorkspace(ws, startDate, now) {
   }
 
   const senderMap = {};
-  for (const acc of allAccounts) {
+  for (const acc of accountIds) {
     senderMap[acc.id] = {
       displayName: `${acc.firstName || ''} ${acc.lastName || ''}`.trim() || `Account ${acc.id}`,
       total_leads: 0, finished_leads: 0, in_progress: 0,
@@ -78,19 +127,19 @@ async function processWorkspace(ws, startDate, now) {
     };
   }
 
-  for (const camp of activeCampaigns) {
-    const accountIds = camp.campaignAccountIds || [];
-    for (const accId of accountIds) {
+  for (const camp of activeCampaignRaw) {
+    const campAccountIds = camp.campaignAccountIds || [];
+    for (const accId of campAccountIds) {
       if (senderMap[accId]) {
-        const divisor = accountIds.length || 1;
-        senderMap[accId].total_leads += Math.round((camp.progressStats?.totalUsers || 0) / divisor);
-        senderMap[accId].finished_leads += Math.round((camp.progressStats?.totalUsersFinished || 0) / divisor);
-        senderMap[accId].in_progress += Math.round((camp.progressStats?.totalUsersInProgress || 0) / divisor);
+        const divisor = campAccountIds.length || 1;
+        senderMap[accId].total_leads += Math.round(camp.totalUsers / divisor);
+        senderMap[accId].finished_leads += Math.round(camp.totalUsersFinished / divisor);
+        senderMap[accId].in_progress += Math.round(camp.totalUsersInProgress / divisor);
       }
     }
   }
 
-  for (const acc of allAccounts) {
+  for (const acc of accountIds) {
     const accStats = accountStatsMap[acc.id] || { inmails: 0, connections: 0, connectionsAccepted: 0 };
     if (senderMap[acc.id]) {
       senderMap[acc.id].inmails = accStats.inmails;
@@ -112,47 +161,7 @@ async function processWorkspace(ws, startDate, now) {
     }))
     .sort((a, b) => b.inmails - a.inmails);
 
-  let totalUsers = 0, totalFinished = 0, totalInProgress = 0;
-  let totalInmails = 0, totalConnections = 0, totalConnectionsAccepted = 0;
-  for (const camp of activeCampaigns) {
-    totalUsers += camp.progressStats?.totalUsers || 0;
-    totalFinished += camp.progressStats?.totalUsersFinished || 0;
-    totalInProgress += camp.progressStats?.totalUsersInProgress || 0;
-  }
-  for (const day of Object.values(byDay)) {
-    totalInmails += day.totalInmailStarted || 0;
-    totalConnections += day.connectionsSent || 0;
-    totalConnectionsAccepted += day.connectionsAccepted || 0;
-  }
-
-  return {
-    client_id: ws.client_id,
-    client_name: ws.client_name,
-    accounts,
-    chartData,
-    campaigns: activeCampaigns.map(c => ({
-      id: c.id,
-      name: c.name,
-      completion_pct: c.progressStats?.totalUsers > 0
-        ? Math.round((c.progressStats.totalUsersFinished / c.progressStats.totalUsers) * 100)
-        : 0,
-      total_leads: c.progressStats?.totalUsers || 0,
-      finished_leads: c.progressStats?.totalUsersFinished || 0,
-      in_progress: c.progressStats?.totalUsersInProgress || 0,
-    })),
-    summary: {
-      active_campaigns: activeCampaigns.length,
-      total_campaigns: allCampaigns.length,
-      total_accounts: accounts.length,
-      completion_pct: totalUsers > 0 ? Math.round((totalFinished / totalUsers) * 100) : null,
-      total_leads: totalUsers,
-      total_finished: totalFinished,
-      total_in_progress: totalInProgress,
-      total_inmails: totalInmails,
-      total_connections: totalConnections,
-      total_connections_accepted: totalConnectionsAccepted,
-    },
-  };
+  return { accounts };
 }
 
 Deno.serve(async (req) => {
@@ -164,7 +173,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { days = 30, client_id } = body;
+    const { days = 30, client_id, phase, account_ids, active_campaign_raw } = body;
 
     let clients = await base44.asServiceRole.entities.Client.list('-updated_date', 200);
     if (!Array.isArray(clients)) clients = clients?.items || clients?.data || [];
@@ -181,30 +190,30 @@ Deno.serve(async (req) => {
     const now = new Date();
     const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-    // If a specific client_id is requested, process only that one
+    // Phase 2: per-sender stats (called after phase 1 with account list from frontend)
+    if (phase === 'senders' && client_id) {
+      const ws = allWorkspaces.find(w => w.client_id === client_id);
+      if (!ws) return Response.json({ error: 'Workspace not found' }, { status: 404 });
+      const result = await processSendersPhase(ws, startDate, now, account_ids || [], active_campaign_raw || []);
+      return Response.json(result);
+    }
+
+    // Phase 1: summary (campaigns, chart, account list)
     if (client_id) {
       const ws = allWorkspaces.find(w => w.client_id === client_id);
-      if (!ws) {
-        return Response.json({ error: 'Workspace not found' }, { status: 404 });
-      }
+      if (!ws) return Response.json({ error: 'Workspace not found' }, { status: 404 });
       try {
-        const result = await processWorkspace(ws, startDate, now);
-        return Response.json({ workspace: result, workspace_list: null });
+        const result = await processSummaryPhase(ws, startDate, now);
+        return Response.json({ workspace: { client_id: ws.client_id, client_name: ws.client_name, ...result }, workspace_list: null });
       } catch (err) {
         return Response.json({
-          workspace: {
-            client_id: ws.client_id,
-            client_name: ws.client_name,
-            error: err?.message || String(err),
-            accounts: [], campaigns: [], chartData: [], summary: null,
-          },
+          workspace: { client_id: ws.client_id, client_name: ws.client_name, error: err?.message || String(err), campaigns: [], chartData: [], summary: null, accountIds: [], activeCampaignRaw: [] },
           workspace_list: null,
         });
       }
     }
 
-    // No client_id: return just the list of workspaces (id + name) so the frontend
-    // knows what to fetch, without fetching any data yet
+    // No client_id: return just the workspace list
     return Response.json({
       workspace: null,
       workspace_list: allWorkspaces.map(w => ({ client_id: w.client_id, client_name: w.client_name })),

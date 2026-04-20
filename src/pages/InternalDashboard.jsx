@@ -29,7 +29,7 @@ function PctBar({ pct }) {
 
 function WorkspaceCard({ workspace, days }) {
   const [expanded, setExpanded] = useState(true);
-  const { client_name, accounts, campaigns, chartData, summary, error } = workspace;
+  const { client_name, accounts = [], campaigns = [], chartData = [], summary, error } = workspace;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">

@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { days = 30 } = body; // time period in days
+    const { days = 30, startDate: startDateOverride, endDate: endDateOverride } = body;
 
     // Build list of workspaces
     let clients = await base44.asServiceRole.entities.Client.list('-updated_date', 200);
@@ -34,9 +34,8 @@ Deno.serve(async (req) => {
       ...clientWorkspaces,
     ];
 
-    const now = new Date();
-    // Always use a rolling window — avoids timezone/bucketing issues with HeyReach daily stats
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const now = endDateOverride ? new Date(endDateOverride) : new Date();
+    const startDate = startDateOverride ? new Date(startDateOverride) : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
     const workspaceResults = await Promise.all(allWorkspaces.map(async (ws) => {
       try {
@@ -58,8 +57,8 @@ Deno.serve(async (req) => {
           fetchAllPages('https://api.heyreach.io/api/public/campaign/GetAll', ws.api_key, (offset) => ({ offset, limit: 100 })),
           fetchAllPages('https://api.heyreach.io/api/public/li_account/GetAll', ws.api_key, (offset) => ({ offset, limit: 100 })),
           heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
-            startDate: startDate.toISOString(),
-            endDate: now.toISOString(),
+            startDate: startDate instanceof Date ? startDate.toISOString() : startDate,
+            endDate: now instanceof Date ? now.toISOString() : now,
             accountIds: [],
             campaignIds: [],
           }),
@@ -82,8 +81,8 @@ Deno.serve(async (req) => {
         const accountStatsMap = {};
         await Promise.all(allAccounts.map(async (acc) => {
           const sd = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
-            startDate: startDate.toISOString(),
-            endDate: now.toISOString(),
+            startDate: startDate instanceof Date ? startDate.toISOString() : startDate,
+            endDate: now instanceof Date ? now.toISOString() : now,
             accountIds: [acc.id],
             campaignIds: [],
           });

@@ -210,7 +210,7 @@ export default function InternalDashboard() {
         setLastUpdated(cached.lastUpdated);
         setLoading(false);
       }
-      return;
+      return cached; // signal that cache was hit
     }
     if (!silent) {
       setLoading(true);
@@ -244,7 +244,14 @@ export default function InternalDashboard() {
 
   function handlePeriodChange(d) {
     setDays(d);
-    load(d);
+    // If cached, swap instantly without showing spinner
+    const cached = getCached(d);
+    if (cached) {
+      setWorkspaces(cached.workspaces);
+      setLastUpdated(cached.lastUpdated);
+    } else {
+      load(d);
+    }
   }
 
   const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);

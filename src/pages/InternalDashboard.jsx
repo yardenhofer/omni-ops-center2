@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { RefreshCw, Linkedin, AlertTriangle, ChevronDown, ChevronRight, Users, BarChart3, TrendingUp, Activity, Mail, Link2 } from "lucide-react";
 import OutreachChart from "@/components/internaldashboard/OutreachChart";
@@ -197,38 +197,88 @@ function setCache(d, workspaces) {
 
 export default function InternalDashboard() {
   const [workspaces, setWorkspaces] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Tracks which workspace IDs are still loading
+  const [loadingIds, setLoadingIds] = useState(new Set());
+  const [initializing, setInitializing] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [days, setDays] = useState(1);
+  const cancelledRef = useRef(false);
+
+  async function fetchWorkspace(clientId, d) {
+    const res = await base44.functions.invoke("heyReachAccountStats", { days: d, client_id: clientId });
+    return res.data.workspace;
+  }
 
   async function load(d, forceRefresh = false) {
     const cached = !forceRefresh && getCached(d);
     if (cached) {
       setWorkspaces(cached.workspaces);
       setLastUpdated(cached.lastUpdated);
-      setLoading(false);
+      setInitializing(false);
+      setLoadingIds(new Set());
       return;
     }
-    setLoading(true);
+
+    cancelledRef.current = false;
+    setWorkspaces([]);
+    setLoadingIds(new Set());
+    setInitializing(true);
     setError(null);
+
     try {
-      const res = await base44.functions.invoke("heyReachAccountStats", { days: d ?? days });
-      const ws = res.data.workspaces || [];
-      setWorkspaces(ws);
+      // Phase 1: get the workspace list instantly
+      const listRes = await base44.functions.invoke("heyReachAccountStats", { days: d });
+      const wsList = listRes.data.workspace_list || [];
+
+      if (cancelledRef.current) return;
+
+      // Show skeleton cards immediately
+      setInitializing(false);
+      setLoadingIds(new Set(wsList.map(w => w.client_id)));
+      // Seed with placeholder entries so cards appear right away
+      setWorkspaces(wsList.map(w => ({ client_id: w.client_id, client_name: w.client_name, _loading: true })));
+
+      // Phase 2: fetch each workspace sequentially, updating UI as each finishes
+      const collected = [];
+      for (const w of wsList) {
+        if (cancelledRef.current) return;
+        try {
+          const ws = await fetchWorkspace(w.client_id, d);
+          if (cancelledRef.current) return;
+          collected.push(ws);
+          setWorkspaces(prev => prev.map(p => p.client_id === ws.client_id ? ws : p));
+        } catch (err) {
+          const errWs = {
+            client_id: w.client_id,
+            client_name: w.client_name,
+            error: err?.message || "Failed",
+            accounts: [], campaigns: [], chartData: [], summary: null,
+          };
+          collected.push(errWs);
+          setWorkspaces(prev => prev.map(p => p.client_id === w.client_id ? errWs : p));
+        }
+        setLoadingIds(prev => { const n = new Set(prev); n.delete(w.client_id); return n; });
+      }
+
       setLastUpdated(new Date());
-      setCache(d, ws);
+      setCache(d, collected);
+
     } catch (e) {
       setError(e?.message || "Failed to load data");
+      setInitializing(false);
     }
-    setLoading(false);
   }
 
-  useEffect(() => { load(days); }, []);
+  useEffect(() => { load(days); return () => { cancelledRef.current = true; }; }, []);
 
-  function handlePeriodChange(d) {
-    setDays(d);
-    load(d);
+  function handlePeriodChange(newD) {
+    cancelledRef.current = true;
+    setDays(newD);
+    setTimeout(() => {
+      cancelledRef.current = false;
+      load(newD, true);
+    }, 0);
   }
 
   const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);
@@ -259,7 +309,7 @@ export default function InternalDashboard() {
               <button
                 key={opt.days}
                 onClick={() => handlePeriodChange(opt.days)}
-                disabled={loading}
+                disabled={initializing}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
                   days === opt.days
                     ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm"
@@ -271,17 +321,17 @@ export default function InternalDashboard() {
             ))}
           </div>
           <button
-            onClick={() => load(days, true)}
+            onClick={() => { cancelledRef.current = true; setTimeout(() => { cancelledRef.current = false; load(days, true); }, 0); }}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-4 h-4 ${initializing || loadingIds.size > 0 ? "animate-spin" : ""}`} />
             Refresh Data
           </button>
         </div>
       </div>
 
       {/* Summary stats */}
-      {!loading && workspaces.length > 0 && (
+      {workspaces.filter(w => !w._loading).length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: "LinkedIn Senders", value: totalAccounts, icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
@@ -303,25 +353,47 @@ export default function InternalDashboard() {
       )}
 
       {/* Content */}
-      {loading ? (
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
+        </div>
+      )}
+
+      {initializing ? (
         <div className="space-y-3">
           {Array(2).fill(0).map((_, i) => (
             <div key={i} className="h-48 rounded-xl bg-gray-200 dark:bg-gray-800 animate-pulse" />
           ))}
         </div>
-      ) : error ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
-        </div>
-      ) : workspaces.length === 0 ? (
+      ) : workspaces.length === 0 && !error ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           No HeyReach workspaces configured.
         </div>
       ) : (
         <div className="space-y-4">
           {workspaces.map(w => (
-            <WorkspaceCard key={w.client_id} workspace={w} days={days} />
+            w._loading ? (
+              <div key={w.client_id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                    <Linkedin className="w-4 h-4 text-blue-500 animate-pulse" />
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
+                  </div>
+                  <div className="text-xs text-gray-400 animate-pulse">Fetching data…</div>
+                </div>
+              </div>
+            ) : (
+              <WorkspaceCard key={w.client_id} workspace={w} days={days} />
+            )
           ))}
+          {loadingIds.size > 0 && (
+            <p className="text-xs text-center text-gray-400 animate-pulse">
+              Loading {loadingIds.size} more workspace{loadingIds.size > 1 ? 's' : ''}…
+            </p>
+          )}
         </div>
       )}
     </div>

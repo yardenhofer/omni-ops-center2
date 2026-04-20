@@ -213,39 +213,20 @@ export default function InternalDashboard() {
     return true;
   }
 
-  async function load(d, forceRefresh = false) {
+  async function load(d) {
     setLoading(true);
     setError(null);
-
-    // On force refresh, trigger a background sync then reload from DB
-    if (forceRefresh) {
-      setSyncing(true);
-      try {
-        await base44.functions.invoke("heyReachCacheSync", {});
-        delete sessionCache[d];
-        await loadFromDB(d);
-      } catch (e) {
-        setError(e?.message || "Sync failed");
-      }
-      setSyncing(false);
-      setLoading(false);
-      return;
-    }
-
-    // Try DB cache first
     const hit = await loadFromDB(d);
-    if (!hit) {
-      // No cache yet — trigger a live sync
-      setSyncing(true);
-      try {
-        await base44.functions.invoke("heyReachCacheSync", {});
-        await loadFromDB(d);
-      } catch (e) {
-        setError(e?.message || "Failed to load data");
-      }
-      setSyncing(false);
-    }
+    if (!hit) setError("No data cached yet — the background sync runs every 15 minutes. Please check back shortly.");
     setLoading(false);
+  }
+
+  async function refresh() {
+    setSyncing(true);
+    // Clear session cache so we re-read from DB
+    for (const k of Object.keys(sessionCache)) delete sessionCache[k];
+    await load(days);
+    setSyncing(false);
   }
 
   useEffect(() => {
@@ -261,8 +242,8 @@ export default function InternalDashboard() {
     }
     setLoading(true);
     const hit = await loadFromDB(d);
-    if (!hit) await load(d);
-    else setLoading(false);
+    if (!hit) setError("No data cached for this period yet.");
+    setLoading(false);
   }
 
   const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);
@@ -306,12 +287,12 @@ export default function InternalDashboard() {
             ))}
           </div>
           <button
-            onClick={() => load(days, true)}
-            disabled={syncing}
+            onClick={refresh}
+            disabled={syncing || loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium disabled:opacity-50"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            {syncing ? "Syncing…" : "Refresh Data"}
+            {syncing ? "Loading…" : "Reload"}
           </button>
         </div>
       </div>

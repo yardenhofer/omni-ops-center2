@@ -38,43 +38,34 @@ Deno.serve(async (req) => {
     // Always use a rolling window — avoids timezone/bucketing issues with HeyReach daily stats
     const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-    const workspaces = [];
-
-    for (const ws of allWorkspaces) {
+    const workspaceResults = await Promise.all(allWorkspaces.map(async (ws) => {
       try {
-        // 1. Fetch all campaigns (paginated)
-        let allCampaigns = [];
-        let offset = 0;
-        while (true) {
-          const campData = await heyFetch('https://api.heyreach.io/api/public/campaign/GetAll', ws.api_key, { offset, limit: 100 });
-          if (!campData) break;
-          const items = campData.items || [];
-          allCampaigns = allCampaigns.concat(items);
-          if (items.length < 100) break;
-          offset += 100;
+        // 1+2+3. Fetch campaigns, accounts, and overall stats in parallel
+        async function fetchAllPages(url, apiKey, bodyFn) {
+          let all = [], offset = 0;
+          while (true) {
+            const data = await heyFetch(url, apiKey, bodyFn(offset));
+            if (!data) break;
+            const items = data.items || [];
+            all = all.concat(items);
+            if (items.length < 100) break;
+            offset += 100;
+          }
+          return all;
         }
+
+        const [allCampaigns, allAccounts, overallStats] = await Promise.all([
+          fetchAllPages('https://api.heyreach.io/api/public/campaign/GetAll', ws.api_key, (offset) => ({ offset, limit: 100 })),
+          fetchAllPages('https://api.heyreach.io/api/public/li_account/GetAll', ws.api_key, (offset) => ({ offset, limit: 100 })),
+          heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
+            startDate: startDate.toISOString(),
+            endDate: now.toISOString(),
+            accountIds: [],
+            campaignIds: [],
+          }),
+        ]);
 
         const activeCampaigns = allCampaigns.filter(c => c.status === 'IN_PROGRESS');
-
-        // 2. Fetch all LinkedIn accounts
-        let allAccounts = [];
-        let accOffset = 0;
-        while (true) {
-          const accData = await heyFetch('https://api.heyreach.io/api/public/li_account/GetAll', ws.api_key, { offset: accOffset, limit: 100 });
-          if (!accData) break;
-          const items = accData.items || [];
-          allAccounts = allAccounts.concat(items);
-          if (items.length < 100) break;
-          accOffset += 100;
-        }
-
-        // 3. Fetch overall stats for the period (all accounts combined) for chart data
-        const overallStats = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
-          startDate: startDate.toISOString(),
-          endDate: now.toISOString(),
-          accountIds: [],
-          campaignIds: [],
-        });
 
         // Build daily chart data from byDayStats
         const byDay = overallStats?.byDayStats || {};
@@ -87,9 +78,9 @@ Deno.serve(async (req) => {
           }))
           .sort((a, b) => a.date.localeCompare(b.date));
 
-        // 4. Per-account stats — fetch one at a time sequentially to avoid rate limiting
+        // 4. Per-account stats — fetch all in parallel
         const accountStatsMap = {};
-        for (const acc of allAccounts) {
+        await Promise.all(allAccounts.map(async (acc) => {
           const sd = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
             startDate: startDate.toISOString(),
             endDate: now.toISOString(),
@@ -103,7 +94,7 @@ Deno.serve(async (req) => {
             connectionsAccepted += day.connectionsAccepted || 0;
           }
           accountStatsMap[acc.id] = { inmails, connections, connectionsAccepted };
-        }
+        }));
 
         // 5. Build per-sender data
         // Build accountId -> full name map from firstName + lastName
@@ -178,7 +169,7 @@ Deno.serve(async (req) => {
           totalConnectionsAccepted += day.connectionsAccepted || 0;
         }
 
-        workspaces.push({
+        return {
           client_id: ws.client_id,
           client_name: ws.client_name,
           accounts,
@@ -205,10 +196,10 @@ Deno.serve(async (req) => {
             total_connections: totalConnections,
             total_connections_accepted: totalConnectionsAccepted,
           },
-        });
+        };
 
       } catch (err) {
-        workspaces.push({
+        return {
           client_id: ws.client_id,
           client_name: ws.client_name,
           error: err?.message || String(err),
@@ -216,11 +207,11 @@ Deno.serve(async (req) => {
           campaigns: [],
           chartData: [],
           summary: null,
-        });
+        };
       }
-    }
+    }));
 
-    return Response.json({ success: true, workspaces });
+    return Response.json({ success: true, workspaces: workspaceResults });
 
   } catch (topErr) {
     return Response.json({ error: topErr?.message }, { status: 500 });

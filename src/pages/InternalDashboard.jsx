@@ -173,27 +173,8 @@ function WorkspaceCard({ workspace, days }) {
   );
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-function getCached(d) {
-  try {
-    const raw = sessionStorage.getItem(`heyreach_${d}`);
-    if (!raw) return null;
-    const { workspaces, lastUpdated, expiry } = JSON.parse(raw);
-    if (Date.now() > expiry) return null;
-    return { workspaces, lastUpdated: new Date(lastUpdated) };
-  } catch { return null; }
-}
-
-function setCache(d, workspaces) {
-  try {
-    sessionStorage.setItem(`heyreach_${d}`, JSON.stringify({
-      workspaces,
-      lastUpdated: new Date().toISOString(),
-      expiry: Date.now() + CACHE_TTL_MS,
-    }));
-  } catch {}
-}
+// Session-level cache to avoid re-fetching from DB on period switch
+const sessionCache = {};
 
 export default function InternalDashboard() {
   const [workspaces, setWorkspaces] = useState([]);
@@ -201,57 +182,87 @@ export default function InternalDashboard() {
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [days, setDays] = useState(1);
+  const [syncing, setSyncing] = useState(false);
 
-  async function load(d, forceRefresh = false, silent = false) {
-    const cached = !forceRefresh && getCached(d);
-    if (cached) {
-      if (!silent) {
-        setWorkspaces(cached.workspaces);
-        setLastUpdated(cached.lastUpdated);
-        setLoading(false);
+  async function loadFromDB(d) {
+    if (sessionCache[d]) {
+      setWorkspaces(sessionCache[d].workspaces);
+      setLastUpdated(sessionCache[d].lastUpdated);
+      setLoading(false);
+      return true;
+    }
+    // Read cache records for this day period from DB
+    const records = await base44.entities.HeyReachCache.filter({ days: d });
+    if (!records || records.length === 0) return false;
+
+    const ws = records
+      .filter(r => r.workspace_data)
+      .map(r => JSON.parse(r.workspace_data));
+
+    // Sort: internal first, then clients
+    ws.sort((a, b) => {
+      if (a.client_id === '__internal__') return -1;
+      if (b.client_id === '__internal__') return 1;
+      return (a.client_name || '').localeCompare(b.client_name || '');
+    });
+
+    const syncedAt = new Date(records[0].synced_at);
+    sessionCache[d] = { workspaces: ws, lastUpdated: syncedAt };
+    setWorkspaces(ws);
+    setLastUpdated(syncedAt);
+    return true;
+  }
+
+  async function load(d, forceRefresh = false) {
+    setLoading(true);
+    setError(null);
+
+    // On force refresh, trigger a background sync then reload from DB
+    if (forceRefresh) {
+      setSyncing(true);
+      try {
+        await base44.functions.invoke("heyReachCacheSync", {});
+        delete sessionCache[d];
+        await loadFromDB(d);
+      } catch (e) {
+        setError(e?.message || "Sync failed");
       }
-      return cached; // signal that cache was hit
+      setSyncing(false);
+      setLoading(false);
+      return;
     }
-    if (!silent) {
-      setLoading(true);
-      setError(null);
-    }
-    try {
-      const res = await base44.functions.invoke("heyReachAccountStats", { days: d ?? days });
-      const ws = res.data.workspaces || [];
-      if (!silent) {
-        setWorkspaces(ws);
-        setLastUpdated(new Date());
+
+    // Try DB cache first
+    const hit = await loadFromDB(d);
+    if (!hit) {
+      // No cache yet — trigger a live sync
+      setSyncing(true);
+      try {
+        await base44.functions.invoke("heyReachCacheSync", {});
+        await loadFromDB(d);
+      } catch (e) {
+        setError(e?.message || "Failed to load data");
       }
-      setCache(d, ws);
-    } catch (e) {
-      if (!silent) setError(e?.message || "Failed to load data");
+      setSyncing(false);
     }
-    if (!silent) setLoading(false);
+    setLoading(false);
   }
 
   useEffect(() => {
-    load(days).then(() => {
-      // Prefetch 7d and 30d in background after initial load
-      setTimeout(() => {
-        if (!getCached(7)) load(7, false, true);
-      }, 500);
-      setTimeout(() => {
-        if (!getCached(30)) load(30, false, true);
-      }, 1000);
-    });
+    load(days);
   }, []);
 
-  function handlePeriodChange(d) {
+  async function handlePeriodChange(d) {
     setDays(d);
-    // If cached, swap instantly without showing spinner
-    const cached = getCached(d);
-    if (cached) {
-      setWorkspaces(cached.workspaces);
-      setLastUpdated(cached.lastUpdated);
-    } else {
-      load(d);
+    if (sessionCache[d]) {
+      setWorkspaces(sessionCache[d].workspaces);
+      setLastUpdated(sessionCache[d].lastUpdated);
+      return;
     }
+    setLoading(true);
+    const hit = await loadFromDB(d);
+    if (!hit) await load(d);
+    else setLoading(false);
   }
 
   const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);
@@ -272,7 +283,8 @@ export default function InternalDashboard() {
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             LinkedIn campaign status across all HeyReach workspaces
-            {lastUpdated && <span className="ml-2 text-xs text-gray-400">· Updated {lastUpdated.toLocaleTimeString()}</span>}
+            {syncing && <span className="ml-2 text-xs text-yellow-400">· Syncing from HeyReach…</span>}
+            {!syncing && lastUpdated && <span className="ml-2 text-xs text-gray-400">· Last synced {lastUpdated.toLocaleTimeString()}</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -295,10 +307,11 @@ export default function InternalDashboard() {
           </div>
           <button
             onClick={() => load(days, true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium"
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-gray-800 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-xs font-medium disabled:opacity-50"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh Data
+            <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing…" : "Refresh Data"}
           </button>
         </div>
       </div>

@@ -1,0 +1,29 @@
+{
+  "name": "HeyReachCache",
+  "type": "object",
+  "properties": {
+    "cache_key": {
+      "type": "string",
+      "description": "Unique key: {client_id}_{days}"
+    },
+    "client_id": {
+      "type": "string"
+    },
+    "days": {
+      "type": "number"
+    },
+    "workspace_data": {
+      "type": "string",
+      "description": "JSON-stringified workspace object"
+    },
+    "synced_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "cache_key",
+    "client_id",
+    "days"
+  ]
+}

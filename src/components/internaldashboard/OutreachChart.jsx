@@ -1,4 +1,4 @@
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
 import { format, parseISO } from "date-fns";
 
 export default function OutreachChart({ chartData }) {
@@ -11,6 +11,39 @@ export default function OutreachChart({ chartData }) {
     label: format(parseISO(d.date), "MMM d"),
   }));
 
+  // Single data point — show a bar chart with labeled metrics instead of a broken line
+  if (formatted.length === 1) {
+    const d = formatted[0];
+    const barData = [
+      { name: "Connection Requests", value: d.connections, color: "#6366f1" },
+      { name: "InMails Sent", value: d.inmails, color: "#10b981" },
+      { name: "Conn. Accepted", value: d.connectionsAccepted || 0, color: "#a78bfa" },
+    ];
+
+    return (
+      <div className="h-[220px] flex flex-col justify-center">
+        <p className="text-xs text-gray-400 mb-3 text-center">{d.label}</p>
+        <div className="flex items-end justify-center gap-6 flex-1">
+          {barData.map(item => (
+            <div key={item.name} className="flex flex-col items-center gap-2">
+              <span className="text-2xl font-bold" style={{ color: item.color }}>{item.value.toLocaleString()}</span>
+              <div
+                className="w-14 rounded-t-md"
+                style={{
+                  backgroundColor: item.color,
+                  height: `${Math.max(8, Math.round((item.value / Math.max(...barData.map(b => b.value), 1)) * 80))}px`,
+                  opacity: 0.85,
+                }}
+              />
+              <span className="text-[10px] text-gray-400 text-center leading-tight">{item.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Multi-day — area chart
   return (
     <ResponsiveContainer width="100%" height={220}>
       <AreaChart data={formatted} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>

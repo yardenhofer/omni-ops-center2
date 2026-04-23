@@ -83,6 +83,15 @@ Deno.serve(async (req) => {
 
         const activeCampaigns = allCampaigns.filter(c => c.status === 'IN_PROGRESS');
 
+        // Detect disconnected accounts (status !== 'ACTIVE')
+        const disconnectedAccounts = allAccounts
+          .filter(a => a.status && a.status !== 'ACTIVE')
+          .map(a => ({
+            id: a.id,
+            name: `${a.firstName || ''} ${a.lastName || ''}`.trim() || `Account ${a.id}`,
+            status: a.status,
+          }));
+
         // Fetch overall 90d stats ONCE (for chart data slicing per period)
         const overallStats90 = await heyFetch('https://api.heyreach.io/api/public/stats/GetOverallStats', ws.api_key, {
           startDate: startDate90.toISOString(),
@@ -167,6 +176,7 @@ Deno.serve(async (req) => {
             const wsData = {
               client_id: ws.client_id,
               client_name: ws.client_name,
+              disconnectedAccounts,
               accounts,
               chartData: overallSlice.chartData,
               campaigns: activeCampaigns.map(c => ({

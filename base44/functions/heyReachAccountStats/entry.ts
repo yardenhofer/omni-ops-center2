@@ -66,6 +66,14 @@ Deno.serve(async (req) => {
 
         const activeCampaigns = allCampaigns.filter(c => c.status === 'IN_PROGRESS');
 
+        const disconnectedAccounts = allAccounts
+          .filter(a => a.status && a.status !== 'ACTIVE')
+          .map(a => ({
+            id: a.id,
+            name: `${a.firstName || ''} ${a.lastName || ''}`.trim() || `Account ${a.id}`,
+            status: a.status,
+          }));
+
         // Build daily chart data from byDayStats
         const byDay = overallStats?.byDayStats || {};
         const chartData = Object.entries(byDay)
@@ -171,6 +179,7 @@ Deno.serve(async (req) => {
         return {
           client_id: ws.client_id,
           client_name: ws.client_name,
+          disconnectedAccounts,
           accounts,
           chartData,
           campaigns: activeCampaigns.map(c => ({

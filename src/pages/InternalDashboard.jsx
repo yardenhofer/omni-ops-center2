@@ -297,21 +297,21 @@ export default function InternalDashboard() {
     const next = d.toISOString().split('T')[0];
     // Don't go into the future
     if (next > todayStr()) return;
+    // If navigating to today, use the preset cache path for accuracy
+    if (next === todayStr()) {
+      setSpecificDate(null);
+      handlePeriodChange(1);
+      return;
+    }
     setSpecificDate(next);
     setDays(null);
     loadForDate(next);
   }
 
   function handleTodayClick() {
-    if (specificDate) {
-      // Already in date mode — navigate to today
-      setSpecificDate(todayStr());
-      setDays(null);
-      loadForDate(todayStr());
-    } else {
-      // In preset mode — switch to Today preset (1 day rolling)
-      handlePeriodChange(1);
-    }
+    // Always use the preset path for today (more accurate, uses DB cache)
+    setSpecificDate(null);
+    handlePeriodChange(1);
   }
 
   const totalAccounts = workspaces.reduce((s, w) => s + (w.summary?.total_accounts || 0), 0);

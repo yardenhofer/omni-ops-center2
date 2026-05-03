@@ -27,14 +27,20 @@ async function fetchAllPages(url, apiKey, bodyFn) {
 }
 
 // Sum byDayStats entries that fall within the last N days
+// byDayStats keys are date strings like "2026-05-02" or "2026-05-02T00:00:00Z"
 function sumByDay(byDay, days, now) {
-  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  // Build a set of valid date strings (YYYY-MM-DD) for the window
+  const validDates = new Set();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - i);
+    validDates.add(d.toISOString().split('T')[0]);
+  }
   let inmails = 0, connections = 0, connectionsAccepted = 0;
   const chartMap = {};
   for (const [dateStr, s] of Object.entries(byDay)) {
-    const d = new Date(dateStr);
-    if (d < cutoff) continue;
     const key = dateStr.split('T')[0];
+    if (!validDates.has(key)) continue;
     inmails += s.totalInmailStarted || 0;
     connections += s.connectionsSent || 0;
     connectionsAccepted += s.connectionsAccepted || 0;

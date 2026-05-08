@@ -22,7 +22,7 @@ export default function OutreachChart({ chartData }) {
 
     return (
       <div className="h-[220px] flex flex-col justify-center">
-        <p className="text-xs text-gray-400 mb-3 text-center">{d.label}</p>
+        <p className="text-xs text-gray-400 mb-3 text-center">Today</p>
         <div className="flex items-end justify-center gap-6 flex-1">
           {barData.map(item => (
             <div key={item.name} className="flex flex-col items-center gap-2">

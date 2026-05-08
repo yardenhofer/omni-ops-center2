@@ -170,10 +170,11 @@ Deno.serve(async (req) => {
           totalFinished += camp.progressStats?.totalUsersFinished || 0;
           totalInProgress += camp.progressStats?.totalUsersInProgress || 0;
         }
-        for (const day of Object.values(byDay)) {
-          totalInmails += day.totalInmailStarted || 0;
-          totalConnections += day.connectionsSent || 0;
-          totalConnectionsAccepted += day.connectionsAccepted || 0;
+        // Sum totals from per-account stats (more accurate than aggregate endpoint for specific date ranges)
+        for (const accStats of Object.values(accountStatsMap)) {
+          totalInmails += accStats.inmails || 0;
+          totalConnections += accStats.connections || 0;
+          totalConnectionsAccepted += accStats.connectionsAccepted || 0;
         }
 
         return {

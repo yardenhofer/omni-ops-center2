@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, ClipboardCheck, ClipboardList, TrendingUp, Bell, Sun, Moon, Menu, Zap, Settings, LogOut, Activity, FileCheck } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, ClipboardList, TrendingUp, Bell, Sun, Moon, Menu, Zap, Settings, LogOut, Activity, FileCheck, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 
@@ -15,6 +15,8 @@ const NAV = [
   { label: "Activity Log",   page: "ActivityLog",    icon: Activity, adminOnly: true },
   { label: "Settings",       page: "Settings",       icon: Settings },
 ];
+
+const SALES_NAV_LINK = { label: "Sales Nav Manager", path: "/SalesNavDashboard", icon: RefreshCw };
 
 export default function Layout({ children, currentPageName }) {
   const [dark, setDark] = useState(() => localStorage.getItem("opsTheme") !== "light");
@@ -116,6 +118,19 @@ export default function Layout({ children, currentPageName }) {
               </Link>
             ))}
           </nav>
+
+          {/* Sales Nav Manager shortcut */}
+          {user?.role === "admin" && (
+            <div className="mx-3 mb-1 mt-2">
+              <Link
+                to={SALES_NAV_LINK.path}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                {SALES_NAV_LINK.label}
+              </Link>
+            </div>
+          )}
 
           {/* Bottom */}
           <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-1 shrink-0">

@@ -1,0 +1,26 @@
+{
+  "name": "SalesNavWorkspace",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false
+    },
+    "heyreach_api_key": {
+      "type": "string"
+    },
+    "color": {
+      "type": "string",
+      "default": "#6366f1"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

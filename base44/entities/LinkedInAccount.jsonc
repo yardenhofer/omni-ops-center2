@@ -1,0 +1,104 @@
+{
+  "name": "LinkedInAccount",
+  "type": "object",
+  "properties": {
+    "workspace_id": {
+      "type": "string"
+    },
+    "heyreach_account_id": {
+      "type": "number"
+    },
+    "email_address": {
+      "type": "string"
+    },
+    "first_name": {
+      "type": "string"
+    },
+    "last_name": {
+      "type": "string"
+    },
+    "profile_url": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "auth_is_valid": {
+      "type": "boolean",
+      "default": true
+    },
+    "is_valid_navigator": {
+      "type": "boolean",
+      "default": true
+    },
+    "last_checked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "disconnected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "connected",
+        "disconnected",
+        "in_progress",
+        "refreshed"
+      ],
+      "default": "connected"
+    },
+    "assigned_to": {
+      "type": "string"
+    },
+    "assigned_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "refreshed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "license_expires_estimate": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "onboarding_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "link_sent",
+        "pending_2fa",
+        "restricted",
+        "completed"
+      ],
+      "default": "pending"
+    },
+    "onboarding_assigned_to": {
+      "type": "string"
+    },
+    "onboarding_notes": {
+      "type": "string"
+    },
+    "onboarding_completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reseller": {
+      "type": "string",
+      "enum": [
+        "reseller_1",
+        "reseller_2",
+        "reseller_3"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "workspace_id"
+  ]
+}

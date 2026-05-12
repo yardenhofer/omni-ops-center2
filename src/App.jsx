@@ -9,6 +9,12 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import LeadListApprovals from './pages/LeadListApprovals';
 import InternalDashboard from './pages/InternalDashboard';
+import SalesNavLayout from './components/salesnav/SalesNavLayout';
+import SalesNavDashboard from './pages/SalesNavDashboard';
+import SalesNavOnboarding from './pages/SalesNavOnboarding';
+import SalesNavExpiring from './pages/SalesNavExpiring';
+import SalesNavHistory from './pages/SalesNavHistory';
+import SalesNavSettings from './pages/SalesNavSettings';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -70,6 +76,14 @@ const AuthenticatedApp = () => {
           <InternalDashboard />
         </LayoutWrapper>
       } />
+      {/* Sales Nav Manager — has its own layout */}
+      <Route element={<SalesNavLayout />}>
+        <Route path="/SalesNavDashboard" element={<SalesNavDashboard />} />
+        <Route path="/SalesNavOnboarding" element={<SalesNavOnboarding />} />
+        <Route path="/SalesNavExpiring" element={<SalesNavExpiring />} />
+        <Route path="/SalesNavHistory" element={<SalesNavHistory />} />
+        <Route path="/SalesNavSettings" element={<SalesNavSettings />} />
+      </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

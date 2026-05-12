@@ -1,0 +1,38 @@
+{
+  "name": "RefreshHistory",
+  "type": "object",
+  "properties": {
+    "heyreach_account_id": {
+      "type": "number"
+    },
+    "account_name": {
+      "type": "string"
+    },
+    "profile_url": {
+      "type": "string"
+    },
+    "workspace_id": {
+      "type": "string"
+    },
+    "disconnected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "refreshed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "refreshed_by": {
+      "type": "string"
+    },
+    "time_to_resolve_minutes": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "account_name"
+  ]
+}
